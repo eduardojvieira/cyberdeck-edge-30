@@ -1,0 +1,23 @@
+Source: adaptation-motorola-eqs
+Section: metapackages
+Priority: optional
+Maintainer: Cyberdeck Edge 30 Project <maintainers@cyberdeck-edge-30.invalid>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: adaptation-motorola-eqs
+Architecture: arm64
+Depends: ${misc:Depends},
+         adaptation-hybris-api32-phone,
+         adaptation-motorola-eqs-configs,
+         linux-bootimage-motorola-eqs,
+         libdroid-hal-lights
+Description: Droidian adaptation for Motorola Edge 30 Ultra
+ Initial metapackage for the Motorola Edge 30 Ultra (eqs).
+
+Package: adaptation-motorola-eqs-configs
+Architecture: arm64
+Depends: ${misc:Depends}
+Description: Droidian adaptation configuration for Motorola Edge 30 Ultra
+ Initial device configuration for the Motorola Edge 30 Ultra (eqs).
