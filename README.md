@@ -4,18 +4,28 @@ Port incremental de Droidian con Plasma Mobile 6 para el Motorola Edge 30 Ultra 
 
 ## Estado actual
 
-Bring-up inicial validado sólo en host. Existe un artefacto `eqs-dev` estructuralmente empaquetado, pero no fue flasheado ni arrancado en el teléfono.
+**Todavía no hay un arranque nativo de Droidian demostrado.** La rootfs con Plasma está instalada en UFS y pudo montarse desde recovery, pero no se verificó `systemd` como PID 1 ni una sesión gráfica. El último estado físico registrado es slot A, kernel stock y recovery diagnóstica v14 con ADB root; no es Droidian funcionando.
+
+La revisión del 4 de septiembre encontró opciones Halium ausentes en el kernel `eqs` y capturas de pstore sin montaje verificado. El siguiente paso es corregir esas bases, conservar la rootfs y llegar a **systemd → Plasma → terminal/SSH**, no regenerar otra imagen completa. Ver [análisis y plan de bring-up](docs/BRINGUP-PLAN.md).
+
+**Bloqueo actual:** escribir la rootfs no completó el port. Falta localizar el corte entre kernel, initramfs y arranque nativo; todavía no hay evidencia de una falla de Plasma. La recovery depende del kernel de `boot_a`, así que un candidato defectuoso puede romper también el acceso de diagnóstico. Ver [problemática actual](docs/BRINGUP-PLAN.md#problemática-actual).
+
+- [x] Rootfs Droidian instalada y montada desde recovery en el teléfono.
+- [x] Recovery diagnóstica con shell root comprobada usando `boot_a` stock.
+- [ ] Kernel `eqs` con requisitos Halium validados y arranque nativo depurable.
+- [ ] Plasma Mobile 6 visible y utilizable en la pantalla interna.
+
+### Evidencia de construcción en host
 
 - [x] Los paquetes arm64 `adaptation-motorola-eqs` y `adaptation-motorola-eqs-configs` construyen dos veces de forma reproducible, con payload mínimo y dependencias de arranque verificadas en host.
-- [x] La configuración Kconfig de `eqs` resuelve desde las fuentes locales fijadas.
+- [x] La configuración de placa Kconfig de `eqs` resuelve desde las fuentes locales fijadas; esto no verifica los requisitos Halium pendientes.
 - [x] Los dos DTB base y los ocho DTBO de `eqs` construyen en una receta host aislada.
 - [x] `dt-images-dev` genera y valida en host el blob DTB multi-árbol y `dtbo.img` con el flujo Qualcomm canónico de LineageOS.
 - [x] `Image-dev-thinlto` construye un `Image` host-only con ThinLTO y CFI, en un solo job de build y linker.
 - [x] `modules-dev-display` compila en host los módulos in-tree, MMRM y display Qualcomm; no demuestra panel, HWC, Plasma ni ejecución en el teléfono.
 - [x] `modules-dev-touch` compila en host la cadena display y touch Goodix de `eqs`; no demuestra panel, touch, HWC, Plasma ni ejecución en el teléfono.
 - [x] `modules-dev-functional` compila en host la cadena display/touch más Wi-Fi, carga y UTAG; no demuestra asociación Wi-Fi, carga, PD, USB ni ejecución en el teléfono.
-- [ ] `Image` con la configuración exacta sigue pendiente: el enlace LTO completo se detuvo por presión de memoria antes de producir el artefacto.
-- [x] `eqs-dev` empaqueta en host kernel, 333 módulos y contenedores Android reproducibles; no constituye evidencia HIL ni una imagen Droidian completa.
+- [x] `eqs-dev` empaqueta en host kernel, 333 módulos y contenedores Android reproducibles; el intento HIL previo bootloopeó antes de USB/telnet, por lo que no constituye una imagen Droidian utilizable.
 
 Para repetir el gate seguro de device trees, con Docker y las referencias locales presentes:
 
@@ -39,7 +49,7 @@ Para la evidencia de desarrollo del kernel existe un target separado:
 port/kernel/build-host-artifacts.sh Image-dev-thinlto
 ```
 
-Usa ThinLTO con CFI, `make -j1` y `ld.lld --threads=1`. Es el perfil entregado de `eqs-dev` host-only: no recorta el contenido del SO ni del runtime, pero tampoco aporta evidencia HIL. Full LTO sigue sin construir y es un gate de promoción para daily/release, no un cambio de funcionalidad del artefacto de desarrollo.
+Usa ThinLTO con CFI, `make -j1` y `ld.lld --threads=1`. Es evidencia de compilación, no de compatibilidad Halium ni HIL. Full LTO se detuvo por presión de memoria; no es una prioridad de bring-up ni un requisito de release demostrado. La siguiente compilación debe incorporar la configuración Halium corregida.
 
 Para comprobar la primera cadena de módulos de pantalla en host:
 
@@ -71,7 +81,7 @@ Para producir el artefacto de desarrollo estructuralmente flasheable y sus paque
 port/kernel/build-dev-packages.sh
 ```
 
-El comando ejecuta primero los gates canónicos de DT y módulos ThinLTO+CFI, instala 333 módulos arm64, prepara el vendor ramdisk con la lista Motorola fijada, y genera `boot.img`, `vendor_boot.img`, `dtbo.img`, `vbmeta.img` y los paquetes `linux-image-motorola-eqs` / `linux-bootimage-motorola-eqs` bajo `.work/eqs-kernel/eqs-dev-packages/`. Ensambla dos veces y exige hashes idénticos. Es **eqs-dev HOST-ONLY**: no prueba que el bootloader, firmware, pantalla, touch, Wi-Fi, carga, USB, Plasma ni el teléfono acepten o ejecuten esos artefactos; tampoco flashea nada. La imagen diaria/release requiere Full LTO y HIL separados.
+El comando ejecuta primero los gates canónicos de DT y módulos ThinLTO+CFI, instala 333 módulos arm64, prepara el vendor ramdisk con la lista Motorola fijada, y genera `boot.img`, `vendor_boot.img`, `dtbo.img`, `vbmeta.img` y los paquetes `linux-image-motorola-eqs` / `linux-bootimage-motorola-eqs` bajo `.work/eqs-kernel/eqs-dev-packages/`. Ensambla dos veces y exige hashes idénticos. Es **eqs-dev HOST-ONLY**: no prueba que el bootloader, firmware, pantalla, touch, Wi-Fi, carga, USB, Plasma ni el teléfono acepten o ejecuten esos artefactos; tampoco flashea nada. El empaquetado determinista no sustituye una configuración Halium correcta ni la validación física.
 
 Para construir y revisar los paquetes mínimos de adaptación:
 
@@ -81,7 +91,7 @@ port/build-adaptation-packages.sh
 
 Construye dos copias limpias arm64 con la imagen Droidian fijada, exige igualdad byte a byte y deja los `.deb`, `SHA256SUMS` y `MANIFEST.txt` en `.work/eqs-adaptation/`. El chequeo verifica dependencias, payload, labels `hw`/`utags`/`utagsBackup` contra fuentes locales eqs/SM8475 y desempaqueta ambos paquetes en una raíz vacía. No puede configurar sus dependencias Droidian externas en esa raíz y no es evidencia HIL.
 
-La rootfs/imagen fastboot de desarrollo con Plasma Mobile 6 y Wayfire ya fue generada e inspeccionada en host:
+La rootfs/imagen fastboot de desarrollo con Plasma Mobile 6 y Wayfire fue generada e inspeccionada en host. Conservar la rootfs ya instalada durante el diagnóstico; no regenerar ni ejecutar el flasher completo para cada intento. Para inspeccionar el artefacto existente:
 
 ```sh
 port/build-eqs-rootfs.sh --inspect-existing
@@ -91,16 +101,16 @@ El ZIP actual es `droidian-UNOFFICIAL-plamo_wf_experimental-phone-motorola_eqs-a
 
 El script fija Droidian `101.20251130`, `plamo_wf_experimental`, API 32 y el builder por digest; conserva el pin de snapshot durante la adaptación y dentro de la rootfs, reconstruye por defecto los cuatro `.deb` locales, los indexa en el `apt/` interno oficial y ejecuta `debos --disable-fakemachine`. Para iterar sobre paquetes ya comprobados se puede usar `--reuse-packages`; `--inspect-existing` reutiliza el ZIP existente y no necesita qemu-binfmt.
 
-Este host tiene `qemu-aarch64` registrado en `binfmt_misc` para ejecutar la segunda etapa arm64; esa configuración de host puede perderse tras un reinicio y se exige sólo al construir. Aunque el ZIP e inspección existan, sigue siendo evidencia host-only: aún **no se sabe si arranca** en `eqs` ni si funcionan pantalla, HWC, Plasma, USB, red, carga o cualquier otra función de hardware. La plantilla upstream de desarrollo usa el PIN `1234`; cambiarlo antes de conectar una red y preparar cifrado/imagen daily siguen siendo tareas separadas.
+Este host tiene `qemu-aarch64` registrado en `binfmt_misc` para ejecutar la segunda etapa arm64; esa configuración de host puede perderse tras un reinicio y se exige sólo al construir. Los candidatos probados no demostraron arranque nativo. La rootfs se cargó mediante FastbootD; la receta versionada usa transferencia por Fastboot y existe una variante local experimental por telnet, no incluida en este commit. Ambas modifican A/B y `userdata`: no usarlas para continuar el diagnóstico. Pantalla, HWC, Plasma, red y carga bajo Droidian siguen pendientes. La plantilla upstream de desarrollo usa el PIN `1234`; cambiarlo antes de conectar una red y preparar cifrado/imagen daily siguen siendo tareas separadas.
 
-La receta exige `openssh-client` para SSH saliente y rechaza `openssh-server`. El build final conservó el snapshot `101.20251130` durante la adaptación y la instalación de paquetes runtime.
+La receta exige `openssh-client` para SSH saliente y rechaza `openssh-server`: no esperar SSH entrante como prueba de boot sin habilitar antes un canal de desarrollo. El build conservó el snapshot `101.20251130`; contiene Plasma 6.3.x, no 6.5.
 
 ## Base técnica
 
 - Dispositivo: Motorola Edge 30 Ultra `eqs`.
 - Arquitectura: arm64.
 - Sistema objetivo: Droidian con Plasma Mobile 6.
-- Adaptación esperada: Halium API32 sobre el firmware Android 14 exacto de la unidad y región. La base de fuentes es `U1SQS34.52-21-1-10` (`motorola/eqs_ge/eqs:14/U1SQS34.52-21-1-10/504bf-893e0:user/release-keys`), no evidencia del firmware físico: una unidad distinta sigue NO-GO hasta demostrar compatibilidad.
+- Adaptación esperada: Halium API32 sobre Android 14. La base stock de la unidad `XT2241-2` RETAR es `U1SQS34.52-21-1-16`, restaurada y arrancada físicamente mediante la secuencia completa firmada `flashfile.xml`. No describe un Android funcional instalado ahora. La fuente congelada dice `-10` y la referencia Lineage inspeccionada usa `-15`; `-16` se acepta sólo como base experimental de bring-up, no como compatibilidad demostrada.
 - Pantalla: interna; no se trabaja en monitores externos por ahora.
 - USB-C: carga y periféricos cuando la adaptación y el hardware lo demuestren.
 
@@ -135,17 +145,21 @@ No forman parte del bring-up inicial: monitor externo, Motorola Ready For, telef
 
 - Registrar el modelo, región y firmware Android 14 exactos antes de modificar el teléfono.
 - El bootloader ya está desbloqueado; nunca relockearlo con imágenes modificadas.
-- Seguir el [procedimiento de primer flash y recuperación](docs/RECOVERY.md); no falta documentación, falta completar y comprobar sus precondiciones físicas.
+- Seguir las [advertencias y estado de recuperación](docs/RECOVERY.md). Slot B no es un respaldo válido; no borrar `userdata` ni aceptar factory reset para resolver el bootloop.
 - No flashear ni probar hardware sin autorización explícita.
 - Nunca flashear a través de un hub USB-C.
 - No guardar claves, tokens ni datos personales en el repositorio o en imágenes de desarrollo.
 - Una afirmación sobre arranque, carga, USB, térmica, suspensión o recuperación requiere evidencia física en el dispositivo.
+- La recuperación stock Android 14 `-16` de esta unidad fue ensayada y arrancó con la secuencia manual completa firmada `flashfile.xml`; el helper local quedó sólo para validación/preflight y no sustituye una recuperación Android 15. Ver [RECOVERY](docs/RECOVERY.md).
 
 ## Próximos pasos
 
-1. Completar y comprobar en la unidad las precondiciones de [recuperación](docs/RECOVERY.md) antes de cualquier flash.
-2. Ejecutar la compilación daily/release con Full LTO en un host con memoria suficiente.
-3. Probar en Android stock el hub, carga y periféricos antes de cualquier prueba de port en el teléfono.
+1. Recoger pstore correctamente desde la recovery existente, antes de otro reinicio y con autorización de diagnóstico.
+2. Corregir requisitos Halium del kernel `eqs`, reconstruir kernel/módulos coherentes e instrumentar initramfs.
+3. Demostrar arranque nativo con `systemd` y después activar el Plasma Mobile 6 ya instalado.
+4. Validar terminal, Wi-Fi, SSH y teclado USB; recién entonces generar una imagen instalable que reproduzca la combinación ensayada.
+
+El [plan detallado](docs/BRINGUP-PLAN.md) contiene evidencia, criterios de aprobación y límites de cada paso.
 
 ## Referencias upstream
 
