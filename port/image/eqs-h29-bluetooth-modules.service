@@ -1,0 +1,14 @@
+[Unit]
+Description=Supplemental Bluetooth modules for the verified eqs H29 kernel
+ConditionKernelVersion=5.10.209-android13-0-gbd42a1bb7281
+ConditionPathExists=!/sys/module/hci_vhci
+Before=bluebinder.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/usr/local/lib/eqs-h29-bluetooth
+ExecStartPre=/usr/bin/sha256sum --check SHA256SUMS
+ExecStart=/usr/sbin/insmod /usr/local/lib/eqs-h29-bluetooth/hci_vhci.ko
+ExecStart=/usr/sbin/insmod /usr/local/lib/eqs-h29-bluetooth/bnep.ko
+RemainAfterExit=yes
+TimeoutStartSec=15

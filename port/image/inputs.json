@@ -1,0 +1,90 @@
+{
+  "base-userdata.img": {
+    "path": ".work/eqs-rootfs/inspection/zip/data/userdata.img",
+    "sha256": "f4e9d5620f0541079d3c74e469c13540e370dbe0bbe89ef827b882481fbac5f8"
+  },
+  "plasma-mobile-wf.deb": {
+    "path": ".work/plasma-safety/docker-build/package-output/rotation-eqs4/package/plasma-mobile-wf_6.3.3-1~git20250414214107.69444e6.next.upgrade.6.3+eqs4_arm64.deb",
+    "sha256": "a208c4c752ed4eee2bc58c52a896ef388ee01b0f247f65214e393befd14fd2fe"
+  },
+  "camera-qt5.so": {
+    "path": ".work/eqs-camera-orientation/candidate/lib/libQt5WaylandClient.so.5.15.15",
+    "sha256": "bd71d40c74cf9dda7482b3227503cbacce7bd052457f0e94cffdd1cccc0c7bfb"
+  },
+  "qt-LICENSE.LGPL3": {
+    "path": ".work/eqs-camera-orientation/candidate/LICENSE.LGPL3",
+    "sha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"
+  },
+  "eqs-init.mmi.rc": {
+    "path": ".work/halium23-supermodem/eqs-init.mmi.rc",
+    "sha256": "fa4f938a99991653c8a83b8da823acc2786ae53c5d39e61f02ad3924fd00540e"
+  },
+  "hci_vhci.ko": {
+    "path": ".work/eqs-bluetooth-h29/module/hci_vhci.ko",
+    "sha256": "59700e154ccbf92eed86534eeca7d46e27703d2ac2ee0c5a2ecb9574c70919d9"
+  },
+  "bnep.ko": {
+    "path": ".work/eqs-bluetooth-h29/bnep/bnep.ko",
+    "sha256": "47a8705d6c9033a3507215f1b33f811fe95416b4bbc7294cc0167810ed77abfa"
+  },
+  "a730_sqe.fw": {
+    "path": ".work/halium21-stock-gpu-firmware/firmware/a730_sqe.fw",
+    "sha256": "e67d1829f57fc8326d806234b932dc3b78e28a9940df34c70752f17d5f38b7aa"
+  },
+  "a730_zap.b00": {
+    "path": ".work/halium21-stock-gpu-firmware/firmware/a730_zap.b00",
+    "sha256": "9cd65a08fa2ce72c05a52aad95951f749f52fc310613a2857e270b463a641a7f"
+  },
+  "a730_zap.b01": {
+    "path": ".work/halium21-stock-gpu-firmware/firmware/a730_zap.b01",
+    "sha256": "1fc98f97cf354b9704b20d0848f7b2739638539a57d88ecf5cc71ca1c5c4e6b9"
+  },
+  "a730_zap.b02": {
+    "path": ".work/halium21-stock-gpu-firmware/firmware/a730_zap.b02",
+    "sha256": "c44fd0b0600927b9efd7d82cfdc1935eb844089736c1935f6cb3688ff64030dc"
+  },
+  "a730_zap.mdt": {
+    "path": ".work/halium21-stock-gpu-firmware/firmware/a730_zap.mdt",
+    "sha256": "da8de71f35d53ec7cf107f02eb760210e41ef9974dfe6963cded7d0abb7c2912"
+  },
+  "gmu_gen70000.bin": {
+    "path": ".work/halium21-stock-gpu-firmware/firmware/gmu_gen70000.bin",
+    "sha256": "b2d3f0e2a98fd6259ab9ffef16df63265542e6cc9a970d53d476e823d432042a"
+  },
+  "candidate-boot.img": {
+    "path": ".work/eqs-h29/boot-bundle/candidate/boot.img",
+    "sha256": "f90379e41ecb791edeb89a42f4c71aa7a3049e29bc871bd07bbd75ff294c797d"
+  },
+  "candidate-dtbo.img": {
+    "path": ".work/eqs-h29/boot-bundle/candidate/dtbo.img",
+    "sha256": "a254e41876750cd7a71840b67b40dadda493d60a08eeb7b7499c3a98e522173a"
+  },
+  "candidate-vbmeta.img": {
+    "path": ".work/eqs-h29/boot-bundle/candidate/vbmeta.img",
+    "sha256": "8f70c5b73592e5797c4fedf0d847550151d18f40810222dcec0a8e3209a6be33"
+  },
+  "candidate-vendor_boot.img": {
+    "path": ".work/eqs-h29/boot-bundle/candidate/vendor_boot.img",
+    "sha256": "766b36c0ae86bd1bd350a1c228eaf2961b95e75ffe2cb2b7743469cb90a24632"
+  },
+  "rescue-boot.img": {
+    "path": ".work/eqs-h29/boot-bundle/rescue/boot.img",
+    "sha256": "cdcf4671edab90d5f72c2bfd8fadfc3d8cc7ddf5bfcef571680cfaa0342886ec"
+  },
+  "rescue-dtbo.img": {
+    "path": ".work/eqs-h29/boot-bundle/rescue/dtbo.img",
+    "sha256": "a12affba234268f86ca71ed57e9bed1112c36cc2b5ce6a1a1af5418a9f196be7"
+  },
+  "rescue-recovery.img": {
+    "path": ".work/eqs-h29/boot-bundle/rescue/recovery.img",
+    "sha256": "008573eba4ef41699835b39cd2a16c4b3ba066830bf9efb7c55d3a034e40a49e"
+  },
+  "rescue-vbmeta.img": {
+    "path": ".work/eqs-h29/boot-bundle/rescue/vbmeta.img",
+    "sha256": "8f70c5b73592e5797c4fedf0d847550151d18f40810222dcec0a8e3209a6be33"
+  },
+  "rescue-vendor_boot.img": {
+    "path": ".work/eqs-h29/boot-bundle/rescue/vendor_boot.img",
+    "sha256": "5fff8e7799b1941939bcf6d32094768e278ef6179f16773f4ce6928142eb0526"
+  }
+}

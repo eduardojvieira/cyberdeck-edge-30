@@ -2,6 +2,22 @@
 # Build and inspect the pinned Droidian 101 Plasma/Wayfire rootfs for eqs.
 set -euo pipefail
 
+# Default deliverable is the consolidated working port, not the September 1
+# host-only experiment below. Keep historical reconstruction explicit.
+case ${1:-} in
+    --consolidated)
+        shift
+        exec "$(dirname -- "$0")/image/build.sh" "$@"
+        ;;
+    --historical) shift ;;
+    --inspect-existing) ;;
+    *)
+        echo 'Use: port/build-eqs-rootfs.sh --consolidated NEW_OUTPUT_DIRECTORY stock|replacement' >&2
+        echo 'Historical September 1 build only: --historical [--reuse-packages]' >&2
+        exit 1
+        ;;
+esac
+
 readonly DROIDIAN_COMMIT='d5b764309d9c9f401f171be603686efd5b853c4d'
 readonly ROOTFS_TEMPLATES_COMMIT='d2212f43e8de78e3b759d94ee427e24268655aee'
 readonly FLASHING_TEMPLATE_COMMIT='b846fa1fa3ec107e4e8675f8b82ee20bbc23866b'
@@ -26,7 +42,7 @@ work="$repo_root/.work/eqs-rootfs"
 build="$work/droidian"
 out="$work/droidian/out"
 apt="$build/apt"
-kernel_dir="$repo_root/.work/eqs-kernel/eqs-dev-packages"
+kernel_dir="$(readlink -m -- "${EQS_KERNEL_WORKDIR:-$repo_root/.work/eqs-kernel}")/eqs-dev-packages"
 adaptation_dir="$repo_root/.work/eqs-adaptation"
 
 for tool in bash cmp cp docker find git grep mkdir rm sed sha256sum sort stat tar tee unzip; do
@@ -64,8 +80,8 @@ if ! $inspect_existing && ! $reuse_packages; then
 fi
 
 declare -a debs=(
-    "$kernel_dir/linux-image-motorola-eqs_5.10.209+git20240821.bd42a1bb-1~eqsdev1_arm64.deb"
-    "$kernel_dir/linux-bootimage-motorola-eqs_5.10.209+git20240821.bd42a1bb-1~eqsdev1_arm64.deb"
+    "$kernel_dir/linux-image-motorola-eqs_5.10.209+git20240821.bd42a1bb-1~eqsdev2_arm64.deb"
+    "$kernel_dir/linux-bootimage-motorola-eqs_5.10.209+git20240821.bd42a1bb-1~eqsdev2_arm64.deb"
     "$adaptation_dir/adaptation-motorola-eqs_0.1.0_arm64.deb"
     "$adaptation_dir/adaptation-motorola-eqs-configs_0.1.0_arm64.deb"
 )
@@ -84,6 +100,19 @@ if ! $inspect_existing; then
 rm -rf -- "$work"
 mkdir -p "$work"
 cp -a "$reference/." "$build/"
+flasher_template="$build/android-image-flashing-template/template/flash_all.sh"
+[[ -f $flasher_template ]] || fail 'Droidian flashing template is missing'
+# eqs userdata is raw in AP Fastboot: use the accepted erase operation, then
+# transfer through panic-RNDIS without the optional progress utility.
+sed -i \
+    -e 's/check_deps ping telnet nc pv/check_deps ping telnet nc/' \
+    -e 's/fastboot format "${partition}"/fastboot -s "${DEVICE}" erase "${partition}"/' \
+    -e 's/pv userdata-raw.img | nc/cat userdata-raw.img | nc/' \
+    "$flasher_template"
+grep -Fq 'check_deps ping telnet nc' "$flasher_template"
+grep -Fq 'fastboot -s "${DEVICE}" erase "${partition}"' "$flasher_template"
+grep -Fq 'if cat userdata-raw.img | nc -q 0 192.168.2.15 12345; then' "$flasher_template"
+! grep -Fq 'pv userdata-raw.img' "$flasher_template"
 snapshot_clean="$build/rootfs-templates/scripts/clean.sh"
 expected_snapshot_cleanup=$'# Workaround until droidian-update-service is in the archive\nif ! grep -q next /etc/apt/apt.conf.d/90-droidian-snapshot; then\n  rm -f /etc/apt/apt.conf.d/90-droidian-snapshot\nfi'
 [[ $(sed -n '/^# Workaround until droidian-update-service is in the archive$/,/^fi$/p' "$snapshot_clean") == "$expected_snapshot_cleanup" ]] || fail 'unexpected upstream snapshot cleanup block'
@@ -161,12 +190,16 @@ done
 [[ ! -e $inspection/zip/data/recovery.img ]] || fail 'fastboot zip unexpectedly includes recovery.img'
 grep -Fxq 'DEVICE_IS_AB=yes' "$inspection/zip/data/device-configuration.conf"
 grep -Fxq 'DEVICE_HAS_VENDORBOOT_PARTITION=yes' "$inspection/zip/data/device-configuration.conf"
-grep -Fxq 'USERDATA_FLASHING_METHOD=fastboot' "$inspection/zip/data/device-configuration.conf"
+grep -Fxq 'USERDATA_FLASHING_METHOD=telnet' "$inspection/zip/data/device-configuration.conf"
 grep -Fxq 'EXTRA_INFO_DEVICE_IDS="eqs"' "$inspection/zip/data/device-configuration.conf"
 bash -n "$inspection/zip/flash_all.sh"
+grep -Fq 'check_deps ping telnet nc' "$inspection/zip/flash_all.sh"
+grep -Fq 'fastboot -s "${DEVICE}" erase "${partition}"' "$inspection/zip/flash_all.sh"
+grep -Fq 'if cat userdata-raw.img | nc -q 0 192.168.2.15 12345; then' "$inspection/zip/flash_all.sh"
+! grep -Fq 'pv userdata-raw.img' "$inspection/zip/flash_all.sh"
 
-# Exercise the generated flasher against a fake fastboot binary only.  This
-# proves its current A/B order and product gate without enumerating hardware.
+# Exercise the generated flasher against fake host commands only.  This proves
+# its A/B, raw-userdata erase, panic-RNDIS transfer and product gate paths.
 flasher_test="$inspection/flasher-test"
 mkdir -p "$flasher_test/bin"
 cat > "$flasher_test/bin/fastboot" <<'EOF'
@@ -178,6 +211,7 @@ case "$1" in
         case "$3" in
             getvar) printf 'product: %s\n' "${FAKE_FASTBOOT_PRODUCT:?}" ;;
             flash) printf 'flash %s %s\n' "$4" "$5" >> "$FAKE_FASTBOOT_LOG" ;;
+            erase) printf 'erase %s\n' "$4" >> "$FAKE_FASTBOOT_LOG" ;;
             reboot) printf 'reboot\n' >> "$FAKE_FASTBOOT_LOG" ;;
             *) exit 2 ;;
         esac
@@ -189,7 +223,24 @@ cat > "$flasher_test/bin/sleep" <<'EOF'
 #!/bin/sh
 exit 0
 EOF
-chmod +x "$flasher_test/bin/fastboot" "$flasher_test/bin/sleep"
+cat > "$flasher_test/bin/ping" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat > "$flasher_test/bin/simg2img" <<'EOF'
+#!/bin/sh
+: > "$2"
+EOF
+cat > "$flasher_test/bin/telnet" <<'EOF'
+#!/bin/sh
+cat >> "$FAKE_TELNET_LOG"
+EOF
+cat > "$flasher_test/bin/nc" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_NC_LOG"
+cat >/dev/null
+EOF
+chmod +x "$flasher_test/bin/fastboot" "$flasher_test/bin/sleep" "$flasher_test/bin/ping" "$flasher_test/bin/simg2img" "$flasher_test/bin/telnet" "$flasher_test/bin/nc"
 cat > "$flasher_test/expected-eqs.log" <<'EOF'
 flash boot_a data/boot.img
 flash boot_b data/boot.img
@@ -199,19 +250,24 @@ flash vbmeta_a data/vbmeta.img
 flash vbmeta_b data/vbmeta.img
 flash vendor_boot_a data/vendor_boot.img
 flash vendor_boot_b data/vendor_boot.img
-flash userdata data/userdata.img
+erase userdata
 reboot
 EOF
 : > "$flasher_test/eqs.log"
+: > "$flasher_test/telnet.log"
+: > "$flasher_test/nc.log"
 (
     cd "$inspection/zip"
-    PATH="$flasher_test/bin:$PATH" FAKE_FASTBOOT_PRODUCT=eqs FAKE_FASTBOOT_LOG="$flasher_test/eqs.log" bash ./flash_all.sh
+    PATH="$flasher_test/bin:$PATH" FAKE_FASTBOOT_PRODUCT=eqs FAKE_FASTBOOT_LOG="$flasher_test/eqs.log" FAKE_TELNET_LOG="$flasher_test/telnet.log" FAKE_NC_LOG="$flasher_test/nc.log" bash ./flash_all.sh
 ) > "$flasher_test/eqs.stdout" 2> "$flasher_test/eqs.stderr"
 cmp "$flasher_test/expected-eqs.log" "$flasher_test/eqs.log"
+grep -Fqx 'nc -l -p 12345 > /dev/disk/by-partlabel/userdata' "$flasher_test/telnet.log"
+grep -Fqx 'reboot -f' "$flasher_test/telnet.log"
+grep -Fqx -- '-q 0 192.168.2.15 12345' "$flasher_test/nc.log"
 : > "$flasher_test/bronco.log"
 if (
     cd "$inspection/zip"
-    PATH="$flasher_test/bin:$PATH" FAKE_FASTBOOT_PRODUCT=bronco FAKE_FASTBOOT_LOG="$flasher_test/bronco.log" bash ./flash_all.sh
+    PATH="$flasher_test/bin:$PATH" FAKE_FASTBOOT_PRODUCT=bronco FAKE_FASTBOOT_LOG="$flasher_test/bronco.log" FAKE_TELNET_LOG="$flasher_test/telnet.log" FAKE_NC_LOG="$flasher_test/nc.log" bash ./flash_all.sh
 ) > "$flasher_test/bronco.stdout" 2> "$flasher_test/bronco.stderr"; then
     fail 'generated flasher accepted a non-eqs product'
 fi
