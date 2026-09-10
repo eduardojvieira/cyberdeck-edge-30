@@ -1,0 +1,3 @@
+#!/bin/sh
+# Keep Electron's sandbox; isolate the H29 software-rendering workaround.
+exec /usr/bin/code --ozone-platform=wayland --disable-gpu "$@"

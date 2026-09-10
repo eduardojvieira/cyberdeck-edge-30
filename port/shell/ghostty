@@ -1,0 +1,8 @@
+#!/bin/sh
+# H29 exposes GLES through hybris; Ghostty 1.3 needs desktop OpenGL 4.3.
+# Use existing Mesa/llvmpipe only for this process, never for the Plasma session.
+export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+export LIBGL_ALWAYS_SOFTWARE=1
+export GDK_BACKEND=wayland
+export GSK_RENDERER=gl
+exec /usr/bin/ghostty "$@"

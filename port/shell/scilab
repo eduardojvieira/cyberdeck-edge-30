@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /home/droidian/.local/opt/scilab-2026.1.0/run-scilab "$@"

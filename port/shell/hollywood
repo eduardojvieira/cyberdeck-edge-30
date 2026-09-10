@@ -1,0 +1,6 @@
+#!/bin/sh
+# Start the packaged program inside tmux: its outer byobu relaunch drops options.
+# Private server keeps the animation out of working sessions and user tmux config.
+exec env -u TMUX tmux -L eqs-hollywood -f "$HOME/.config/hollywood/tmux.conf" \
+    new-session -A -s hollywood -n controller \
+    "$HOME/.local/opt/hollywood/bin/hollywood" -s 4 -d 30 "$@"

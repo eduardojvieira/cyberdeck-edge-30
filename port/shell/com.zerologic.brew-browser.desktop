@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Brew Browser
+Comment=Paquetes Homebrew (renderizado por software)
+Exec=/home/droidian/.local/bin/brew-browser
+TryExec=/home/droidian/.local/bin/brew-browser
+Icon=com.zerologic.brew-browser
+Terminal=false
+Categories=Settings;PackageManager;
+StartupNotify=true
+DBusActivatable=false

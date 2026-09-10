@@ -1,0 +1,21 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Visual Studio Code
+GenericName=Text Editor
+Comment=Editor de código (renderizado por software en H29)
+Exec=/home/droidian/.local/bin/code %F
+TryExec=/usr/bin/code
+Icon=vscode
+Terminal=false
+Categories=Development;IDE;TextEditor;
+MimeType=text/plain;inode/directory;application/x-code-workspace;
+StartupNotify=true
+StartupWMClass=Code
+DBusActivatable=false
+Actions=new-empty-window;
+
+[Desktop Action new-empty-window]
+Name=New Empty Window
+Exec=/home/droidian/.local/bin/code --new-window %F
+Icon=vscode

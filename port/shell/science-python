@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "$HOME/.local/opt/miniforge3/bin/conda" run --no-capture-output -n science python "$@"

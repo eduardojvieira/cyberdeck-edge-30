@@ -1,0 +1,29 @@
+#!/bin/sh
+# Toggle Maliit, not the separate Plasma lock-screen keypad.
+set -eu
+if [ "$#" -gt 1 ]; then
+    echo 'Uso: osk [on|off|toggle]' >&2
+    exit 2
+fi
+schema=org.maliit.keyboard.maliit
+case "${1:-toggle}" in
+    on) hidden=false ;;
+    off) hidden=true ;;
+    toggle)
+        current=$(gsettings get "$schema" stay-hidden)
+        case "$current" in
+            true) hidden=false ;;
+            false) hidden=true ;;
+            *) echo 'No se pudo leer el estado del teclado.' >&2; exit 1 ;;
+        esac ;;
+    *) echo 'Uso: osk [on|off|toggle]' >&2; exit 2 ;;
+esac
+gsettings set "$schema" stay-hidden "$hidden"
+if [ "$hidden" = true ]; then
+    message='Oculto. Tocá este icono otra vez para habilitarlo.'
+else
+    message='Habilitado. Aparecerá al tocar un campo de texto.'
+fi
+if command -v notify-send >/dev/null 2>&1; then
+    notify-send -i input-keyboard-virtual 'Teclado táctil' "$message" 2>/dev/null || :
+fi

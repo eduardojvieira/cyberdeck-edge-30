@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Visual Studio Code - URL Handler
+Exec=/home/droidian/.local/bin/code --open-url %U
+Icon=vscode
+NoDisplay=true
+Terminal=false
+MimeType=x-scheme-handler/vscode;
+Categories=Development;IDE;

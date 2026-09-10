@@ -1,0 +1,6 @@
+#!/bin/sh
+# Keep Brew libraries separate from the Droidian/Plasma session.
+unset LD_PRELOAD QT_PLUGIN_PATH QML2_IMPORT_PATH QT_QPA_PLATFORMTHEME
+export LIBGL_ALWAYS_SOFTWARE=1
+export PATH="/home/linuxbrew/.linuxbrew/opt/gnuplot/bin:$PATH"
+exec "/home/linuxbrew/.linuxbrew/opt/maxima/bin/maxima" "$@"

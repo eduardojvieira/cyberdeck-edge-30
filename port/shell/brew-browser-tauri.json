@@ -1,0 +1,11 @@
+{
+  "app": {
+    "windows": [{
+      "label": "main", "title": "Brew Browser",
+      "width": 1100, "height": 479,
+      "minWidth": 360, "minHeight": 300,
+      "maximized": true, "transparent": false
+    }]
+  },
+  "bundle": {"createUpdaterArtifacts": false}
+}

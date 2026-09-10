@@ -1,0 +1,5 @@
+#!/bin/sh
+# H29: software compositing avoids Electron's failed GPU command buffer.
+# Keep Chromium's sandbox enabled; no --no-sandbox workaround.
+exec "$HOME/.local/opt/antigravity-2.12.2/Antigravity-arm64/antigravity" \
+    --ozone-platform=wayland --disable-gpu "$@"

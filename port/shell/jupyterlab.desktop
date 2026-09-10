@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=JupyterLab
+Comment=Notebooks científicos locales; cerrar con Ctrl+C en la terminal
+Exec=/home/droidian/.local/bin/ghostty -e /usr/bin/env -u __EGL_VENDOR_LIBRARY_FILENAMES -u LIBGL_ALWAYS_SOFTWARE -u GDK_BACKEND -u GSK_RENDERER /home/droidian/.local/bin/jupyter-lab
+TryExec=/home/droidian/.local/opt/miniforge3/envs/science/bin/jupyter-lab
+Icon=applications-science
+Terminal=false
+Categories=Development;Science;
+StartupNotify=false

@@ -1,0 +1,19 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Zed
+GenericName=Text Editor
+Comment=Editor de código (Vulkan por software en H29)
+TryExec=/home/droidian/.local/zed.app/bin/zed
+Exec=/home/droidian/.local/zed.app/bin/zed %U
+Icon=/home/droidian/.local/zed.app/share/icons/hicolor/512x512/apps/zed.png
+Terminal=false
+Categories=Development;IDE;TextEditor;
+MimeType=text/plain;application/x-zerosize;x-scheme-handler/zed;
+StartupNotify=true
+DBusActivatable=false
+Actions=NewWorkspace;
+
+[Desktop Action NewWorkspace]
+Exec=/home/droidian/.local/zed.app/bin/zed --new %U
+Name=Open a new workspace

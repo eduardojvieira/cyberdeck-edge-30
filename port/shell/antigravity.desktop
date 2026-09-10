@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Antigravity
+Comment=Antigravity 2.0 de Google (renderizado por software)
+Exec=/home/droidian/.local/bin/antigravity %U
+TryExec=/home/droidian/.local/bin/antigravity
+Icon=antigravity
+Terminal=false
+Categories=Development;
+MimeType=x-scheme-handler/antigravity;
+StartupNotify=true
+StartupWMClass=antigravity
+DBusActivatable=false

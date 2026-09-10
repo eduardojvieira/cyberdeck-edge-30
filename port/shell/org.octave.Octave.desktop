@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=GNU Octave
+Comment=Cálculo numérico (Homebrew ARM64)
+Exec=/home/droidian/.local/bin/octave --gui %f
+TryExec=/home/linuxbrew/.linuxbrew/opt/octave/bin/octave
+Icon=octave
+Terminal=false
+Categories=Education;Science;Math;
+MimeType=text/x-octave;text/x-matlab;
+StartupWMClass=org.octave.Octave

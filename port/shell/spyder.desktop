@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Spyder
+Comment=Python científico (entorno science)
+Exec=/home/droidian/.local/bin/spyder %F
+TryExec=/home/droidian/.local/opt/miniforge3/envs/science/bin/spyder
+Icon=/home/droidian/.local/opt/miniforge3/envs/science/share/icons/spyder.png
+Terminal=false
+Categories=Development;Science;IDE;
+MimeType=text/x-python;
+StartupNotify=true
+StartupWMClass=Spyder

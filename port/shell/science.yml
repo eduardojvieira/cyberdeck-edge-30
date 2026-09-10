@@ -1,0 +1,12 @@
+name: science
+channels:
+  - conda-forge
+dependencies:
+  - sage
+  - spyder
+  - numpy
+  - scipy
+  - sympy
+  - pandas
+  - matplotlib
+  - jupyterlab

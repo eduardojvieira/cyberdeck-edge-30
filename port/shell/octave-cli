@@ -1,0 +1,7 @@
+#!/bin/sh
+# Keep Brew libraries separate from the Droidian/Plasma session.
+unset LD_PRELOAD QT_PLUGIN_PATH QML2_IMPORT_PATH QT_QPA_PLATFORMTHEME
+# Brew LLVM emits unsupported SVE while plotting on H29; avoid its JIT.
+export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=softpipe
+export PATH="/home/linuxbrew/.linuxbrew/opt/gnuplot/bin:$PATH"
+exec "/home/linuxbrew/.linuxbrew/opt/octave/bin/octave-cli" "$@"

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Keep Jupyter's token authentication and bind only to this phone by default.
+exec "$HOME/.local/opt/miniforge3/bin/conda" run --no-capture-output -n science \
+    jupyter lab --ServerApp.ip=127.0.0.1 "$@"

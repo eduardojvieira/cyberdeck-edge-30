@@ -1,0 +1,9 @@
+#!/bin/sh
+# H29: scope Mesa software rendering to WebKit, not the Plasma session.
+export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+export LIBGL_ALWAYS_SOFTWARE=1
+export GDK_BACKEND=wayland
+# Droidian's profile disables WebKit sandboxing globally; do not inherit it.
+unset WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS
+export WEBKIT_FORCE_SANDBOX=1
+exec "$HOME/.local/opt/brew-browser-0.7.2-eqs1/brew-browser" "$@"

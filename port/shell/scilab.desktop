@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Scilab
+Comment=Cálculo numérico (gráficos por software en H29)
+Exec=/home/droidian/.local/bin/scilab -f %f
+TryExec=/home/droidian/.local/opt/scilab-2026.1.0/run-scilab
+Icon=/home/droidian/.local/opt/scilab-2026.1.0/share/icons/hicolor/256x256/apps/scilab.png
+Terminal=false
+Categories=Science;Math;
+MimeType=application/x-scilab-sci;application/x-scilab-sce;

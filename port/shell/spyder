@@ -1,0 +1,5 @@
+#!/bin/sh
+# This conda PyQt5 build has xcb, not Wayland. Do not load Droidian's Qt plugins.
+unset LD_PRELOAD QT_PLUGIN_PATH QML2_IMPORT_PATH QT_QPA_PLATFORMTHEME
+export QT_QPA_PLATFORM=xcb
+exec "$HOME/.local/opt/miniforge3/bin/conda" run --no-capture-output -n science spyder "$@"

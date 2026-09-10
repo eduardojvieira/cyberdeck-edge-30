@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Ghostty
+Comment=Terminal con Fish para el Edge 30 Ultra (renderizado por software)
+Exec=/home/droidian/.local/bin/ghostty
+TryExec=/home/droidian/.local/bin/ghostty
+Icon=com.mitchellh.ghostty
+Terminal=false
+Categories=System;TerminalEmulator;
+StartupNotify=true
+DBusActivatable=false

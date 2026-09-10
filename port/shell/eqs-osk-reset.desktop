@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Restablecer teclado táctil
+Exec=/usr/bin/gsettings set org.maliit.keyboard.maliit stay-hidden false
+OnlyShowIn=KDE;
+NoDisplay=true

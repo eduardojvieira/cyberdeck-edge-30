@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Teclado táctil
+Comment=Ocultar o habilitar el teclado en pantalla durante esta sesión
+Exec=/home/droidian/.local/bin/osk
+TryExec=/home/droidian/.local/bin/osk
+Icon=input-keyboard-virtual
+Terminal=false
+Categories=Settings;Accessibility;
+DBusActivatable=false
