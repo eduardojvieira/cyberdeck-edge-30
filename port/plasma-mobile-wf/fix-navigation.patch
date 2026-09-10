@@ -1,0 +1,435 @@
+--- a/components/wayfireipcplugin/wayfireipc.cpp
++++ b/components/wayfireipcplugin/wayfireipc.cpp
+@@ -3,12 +3,67 @@
+ 
+ #include <QDebug>
+ #include <QtEndian>
++#include <QCoreApplication>
++#include <QJsonArray>
++#include <QTimer>
+ 
+ #include "wayfireipc.h"
+ 
+ // Same bound as the eqs diagnostic IPC client; reject lengths before allocation.
+ static constexpr qint64 maxMessageBytes = 1024 * 1024;
+ 
++// Both channels are byte streams; consume only a complete, bounded JSON frame.
++static bool readFrame(QLocalSocket *socket, QJsonDocument &message)
++{
++    if (socket->bytesAvailable() < 4)
++        return false;
++    const QByteArray header = socket->peek(4);
++    if (header.size() != 4) {
++        socket->abort();
++        return false;
++    }
++    const quint32 size = qFromLittleEndian<quint32>(header.constData());
++    if (size == 0 || size > maxMessageBytes) {
++        qWarning() << "Invalid Wayfire IPC frame length; disconnecting";
++        socket->abort();
++        return false;
++    }
++    if (socket->bytesAvailable() < 4 + qint64(size))
++        return false;
++    socket->read(4);
++    const QByteArray data = socket->read(size);
++    QJsonParseError error;
++    message = QJsonDocument::fromJson(data, &error);
++    if (data.size() != size || error.error != QJsonParseError::NoError ||
++        (!message.isObject() && !message.isArray())) {
++        qWarning() << "Invalid Wayfire IPC JSON; disconnecting";
++        socket->abort();
++        return false;
++    }
++    return true;
++}
++
++static void writeFrame(QLocalSocket *socket, const QJsonDocument &message)
++{
++    const QByteArray data = message.toJson(QJsonDocument::Compact);
++    QDataStream out(socket);
++    out.setVersion(QDataStream::Qt_6_7);
++    out.setByteOrder(QDataStream::LittleEndian);
++    out.writeBytes(data.constData(), data.size());
++}
++
++static bool isApplication(const QJsonObject &view)
++{
++    const int id = view.value("id").toInt(-1);
++    const auto pid = view.value("pid").toInteger(-1);
++    const auto app = view.value("app-id").toString();
++    return id > 0 && view.value("id").toDouble(-1) == id &&
++        pid > 0 && pid != QCoreApplication::applicationPid() &&
++        view.value("role") == "toplevel" && view.value("layer") == "workspace" &&
++        view.value("mapped").toBool() && !app.isEmpty() &&
++        app != "org.kde.polkit-kde-authentication-agent-1";
++}
++
+ WayfireIPC::WayfireIPC(QObject *parent)
+     : QObject{parent}
+ {
+@@ -32,6 +87,7 @@
+         sendMessage(jsonDoc);
+         jsonDoc = QJsonDocument(watchIdle);
+         sendMessage(jsonDoc);
++        sendMessage(QJsonDocument(QJsonObject{{"method", "window-rules/get-focused-view"}}));
+ 
+         
+     }
+@@ -57,28 +113,11 @@
+     // Qt sockets are byte streams. Leave an incomplete frame buffered until the
+     // next readyRead, and yield after a bounded batch so input/lock can progress.
+     for (int processed = 0; processed < 32; ++processed) {
+-        if (m_wfsocket->bytesAvailable() < 4)
+-            return;
+-        const QByteArray header = m_wfsocket->peek(4);
+-        if (header.size() != 4) {
+-            qWarning() << "Cannot read Wayfire IPC header; disconnecting";
+-            m_wfsocket->abort();
+-            return;
+-        }
+-        const quint32 size = qFromLittleEndian<quint32>(header.constData());
+-        if (size == 0 || size > maxMessageBytes) {
+-            qWarning() << "Invalid Wayfire IPC frame length; disconnecting";
+-            m_wfsocket->abort();
+-            return;
+-        }
+-        if (m_wfsocket->bytesAvailable() < 4 + qint64(size))
++        QJsonDocument msg;
++        if (!readFrame(m_wfsocket, msg))
+             return;
+-        m_wfsocket->read(4);
+-        const QByteArray data = m_wfsocket->read(size);
+-        QJsonParseError error;
+-        const QJsonDocument msg = QJsonDocument::fromJson(data, &error);
+-        if (data.size() != size || error.error != QJsonParseError::NoError || !msg.isObject()) {
+-            qWarning() << "Invalid Wayfire IPC JSON; disconnecting";
++        if (!msg.isObject()) {
++            qWarning() << "Unexpected array on Wayfire event channel; disconnecting";
+             m_wfsocket->abort();
+             return;
+         }
+@@ -87,6 +126,13 @@
+         QString appId = msg.object().value("view").toObject().value("app-id").toString();
+         int viewId = msg.object().value("view").toObject().value("id").toInt();
+ 
++        if (event == "view-focused")
++            setActiveView(msg.object().value("view").toObject());
++        else if (event == "view-unmapped" && viewId == m_activeViewId)
++            setActiveView({});
++        else if (event.isEmpty() && msg.object().contains("info"))
++            setActiveView(msg.object().value("info").toObject());
++
+         if(event == "power-key-pressed"){
+             Q_EMIT pwrKeyStateChanged(1);
+         } else if(event == "power-key-released"){
+@@ -105,11 +151,89 @@
+ 
+ void WayfireIPC::sendMessage(QJsonDocument jsonDoc)
+ {
+-    std::string msgString = jsonDoc.toJson(QJsonDocument::Compact).toStdString();
++    writeFrame(m_wfsocket, jsonDoc);
++}
+ 
+-    QDataStream out;
+-    out.setDevice(m_wfsocket);
+-    out.setVersion(QDataStream::Qt_6_7);
+-    out.setByteOrder(QDataStream::LittleEndian);
+-    out.writeBytes(msgString.c_str(), msgString.size());
+-}
+\ No newline at end of file
++void WayfireIPC::setActiveView(const QJsonObject &view)
++{
++    const int id = isApplication(view) && !view.value("minimized").toBool()
++        ? view.value("id").toInt() : -1;
++    if (id != m_activeViewId) {
++        m_activeViewId = id;
++        Q_EMIT activeAppChanged();
++    }
++}
++
++void WayfireIPC::setNavigationEnabled(bool enabled)
++{
++    if (enabled == m_navigationEnabled)
++        return;
++    m_navigationEnabled = enabled;
++    if (!enabled && m_navigationSocket)
++        m_navigationSocket->abort();
++    Q_EMIT navigationEnabledChanged();
++}
++
++bool WayfireIPC::showHome() { return navigate(NavigationAction::Home); }
++bool WayfireIPC::closeActive() { return m_activeViewId > 0 && navigate(NavigationAction::Close); }
++
++bool WayfireIPC::showOverview()
++{
++    if (!m_navigationEnabled || m_navigationSocket || m_wfsocket->state() != QLocalSocket::ConnectedState)
++        return false;
++    sendMessage(QJsonDocument(QJsonObject{{"method", "scale/toggle_all"}}));
++    return true; // Request accepted, not proof that the compositor changed its view.
++}
++
++bool WayfireIPC::navigate(NavigationAction action)
++{
++    if (!m_navigationEnabled || m_navigationSocket || m_wfsocket->state() != QLocalSocket::ConnectedState)
++        return false;
++    // Isolate query replies/timeouts from the power/idle subscription. One
++    // bounded request at a time; never queue Close against an old focused view.
++    auto *socket = new QLocalSocket(this);
++    m_navigationSocket = socket;
++    socket->setReadBufferSize(maxMessageBytes + 4);
++    const auto finish = [this, socket] {
++        if (m_navigationSocket == socket)
++            m_navigationSocket = nullptr;
++        socket->deleteLater();
++    };
++    connect(socket, &QLocalSocket::disconnected, this, finish);
++    connect(socket, &QLocalSocket::errorOccurred, this, [finish](auto) { finish(); });
++    QTimer::singleShot(1500, socket, [socket, finish] { socket->abort(); finish(); });
++    connect(socket, &QLocalSocket::connected, this, [socket] {
++        writeFrame(socket, QJsonDocument(QJsonObject{{"method", "window-rules/list-views"}}));
++    });
++    const int requestedFocus = m_activeViewId;
++    connect(socket, &QLocalSocket::readyRead, this, [this, socket, action, requestedFocus] {
++        QJsonDocument reply;
++        if (!readFrame(socket, reply))
++            return;
++        if (!m_navigationEnabled || !reply.isArray() || reply.array().size() > 512) {
++            qWarning() << "Navigation denied or invalid Wayfire view snapshot";
++            socket->abort();
++            return;
++        }
++        disconnect(socket, &QLocalSocket::readyRead, this, nullptr);
++        // ponytail: one snapshot, capped at 512 views; no long-lived task model.
++        for (const auto &value : reply.array()) {
++            const auto view = value.toObject();
++            if (!isApplication(view) || view.value("minimized").toBool())
++                continue;
++            const int id = view.value("id").toInt();
++            if (action == NavigationAction::Close) {
++                if (id != requestedFocus || m_activeViewId != requestedFocus || !view.value("activated").toBool())
++                    continue;
++                writeFrame(socket, QJsonDocument(QJsonObject{{"method", "window-rules/close-view"},
++                    {"data", QJsonObject{{"id", id}}}}));
++                break;
++            }
++            writeFrame(socket, QJsonDocument(QJsonObject{{"method", "wm-actions/set-minimized"},
++                {"data", QJsonObject{{"view_id", id}, {"state", true}}}}));
++        }
++        socket->disconnectFromServer(); // Qt drains queued writes; no visual-success claim.
++    });
++    socket->connectToServer(m_wfsocket->serverName());
++    return true;
++}
+--- a/components/wayfireipcplugin/wayfireipc.h
++++ b/components/wayfireipcplugin/wayfireipc.h
+@@ -10,27 +10,44 @@
+ #include <QDataStream>
+ #include <QJsonDocument>
+ #include <QJsonObject>
++#include <QPointer>
+ 
+ class WayfireIPC : public QObject
+ {
+     Q_OBJECT
+     QML_SINGLETON
+     QML_ELEMENT
++    Q_PROPERTY(bool navigationEnabled READ navigationEnabled WRITE setNavigationEnabled NOTIFY navigationEnabledChanged)
++    Q_PROPERTY(bool hasActiveApp READ hasActiveApp NOTIFY activeAppChanged)
+ 
+ public:
+     WayfireIPC(QObject *parent = nullptr);
+     void setFullscreen(int viewId, bool state);
++    bool navigationEnabled() const { return m_navigationEnabled; }
++    void setNavigationEnabled(bool enabled);
++    bool hasActiveApp() const { return m_activeViewId > 0; }
++    Q_INVOKABLE bool showHome();
++    Q_INVOKABLE bool showOverview();
++    Q_INVOKABLE bool closeActive();
+     
+ Q_SIGNALS:
+     void viewMapped(QString appId);
+     void pwrKeyStateChanged(int state);
+     void idleTimout();
++    void navigationEnabledChanged();
++    void activeAppChanged();
+ 
+ private Q_SLOTS:
+     void onReadData();
+ 
+ private:
+     void sendMessage(QJsonDocument jsonDoc);
++    enum class NavigationAction { Home, Close };
++    bool navigate(NavigationAction action);
++    void setActiveView(const QJsonObject &view);
+ 
+     QLocalSocket *m_wfsocket = nullptr;
+-};
+\ No newline at end of file
++    QPointer<QLocalSocket> m_navigationSocket;
++    bool m_navigationEnabled = false;
++    int m_activeViewId = -1;
++};
+--- a/containments/taskpanel/package/contents/ui/NavigationPanelComponent.qml
++++ b/containments/taskpanel/package/contents/ui/NavigationPanelComponent.qml
+@@ -11,8 +11,7 @@
+ 
+ import org.kde.plasma.private.mobileshell as MobileShell
+ import org.kde.plasma.private.mobileshell.state as MobileShellState
+-import org.kde.taskmanager as TaskManager
+-import org.kde.plasma.private.mobileshell.windowplugin as WindowPlugin
++import org.kde.plasma.private.mobileshell.wayfireipcplugin as WayfireIpcPlugin
+ import org.kde.plasma.private.mobileshell.shellsettingsplugin as ShellSettings
+ 
+ import org.kde.kirigami as Kirigami
+@@ -30,28 +29,6 @@
+     foregroundColorGroup: opaqueBar ? Kirigami.Theme.Window : Kirigami.Theme.Complementary
+     shadow: !opaqueBar
+ 
+-    TaskManager.VirtualDesktopInfo {
+-        id: virtualDesktopInfo
+-    }
+-
+-    TaskManager.ActivityInfo {
+-        id: activityInfo
+-    }
+-
+-    TaskManager.TasksModel {
+-        id: tasksModel
+-        filterByVirtualDesktop: true
+-        filterByActivity: true
+-        filterNotMaximized: false
+-        filterByScreen: true
+-        filterHidden: true
+-
+-        virtualDesktop: virtualDesktopInfo.currentDesktop
+-        activity: activityInfo.currentActivity
+-
+-        groupMode: TaskManager.TasksModel.GroupDisabled
+-    }
+-
+     // ~~~~
+     // navigation panel actions
+ 
+@@ -59,12 +36,12 @@
+     leftAction: MobileShell.NavigationPanelAction {
+         id: taskSwitcherAction
+ 
+-        enabled: true
++        enabled: WayfireIpcPlugin.WayfireIPC.navigationEnabled
+         iconSource: "mobile-task-switcher"
+         iconSizeFactor: 0.75
+ 
+         onTriggered: {
+-            Plasmoid.triggerTaskSwitcher();
++            WayfireIpcPlugin.WayfireIPC.showOverview();
+         }
+     }
+ 
+@@ -72,7 +49,7 @@
+     middleAction: MobileShell.NavigationPanelAction {
+         id: homeAction
+ 
+-        enabled: true
++        enabled: WayfireIpcPlugin.WayfireIPC.navigationEnabled
+         iconSource: "start-here-kde"
+         iconSizeFactor: 1
+ 
+@@ -85,7 +62,7 @@
+     rightAction: MobileShell.NavigationPanelAction {
+         id: closeAppAction
+ 
+-        enabled: Keyboards.KWinVirtualKeyboard.active || WindowPlugin.WindowUtil.hasCloseableActiveWindow
++        enabled: WayfireIpcPlugin.WayfireIPC.navigationEnabled && (Keyboards.KWinVirtualKeyboard.active || WayfireIpcPlugin.WayfireIPC.hasActiveApp)
+         iconSource: Keyboards.KWinVirtualKeyboard.active ? "go-down-symbolic" : "mobile-close-app"
+         // mobile-close-app (from plasma-frameworks) seems to have fewer margins than icons from breeze-icons
+         iconSizeFactor: Keyboards.KWinVirtualKeyboard.active ? 1 : 0.75
+@@ -94,11 +71,8 @@
+             if (Keyboards.KWinVirtualKeyboard.active) {
+                 // close keyboard if it is open
+                 Keyboards.KWinVirtualKeyboard.active = false;
+-            } else if (WindowPlugin.WindowUtil.hasCloseableActiveWindow) {
+-                // if task switcher is closed, but there is an active window
+-                if (tasksModel.activeTask !== 0) {
+-                    tasksModel.requestClose(tasksModel.activeTask);
+-                }
++            } else {
++                WayfireIpcPlugin.WayfireIPC.closeActive();
+             }
+         }
+     }
+--- a/components/mobileshell/qml/homescreen/HomeScreen.qml
++++ b/components/mobileshell/qml/homescreen/HomeScreen.qml
+@@ -11,6 +11,7 @@
+ import org.kde.plasma.private.mobileshell.shellsettingsplugin as ShellSettings
+ import org.kde.plasma.private.mobileshell.state as MobileShellState
+ import org.kde.plasma.private.mobileshell.windowplugin as WindowPlugin
++import org.kde.plasma.private.mobileshell.wayfireipcplugin as WayfireIpcPlugin
+ 
+ /**
+  * The base homescreen component, implementing features that simplify
+@@ -80,14 +81,13 @@
+         target: MobileShellState.ShellDBusClient
+ 
+         function onOpenHomeScreenRequested() {
+-            if (windowMaximizedTracker.showingWindow) {
++            if (WayfireIpcPlugin.WayfireIPC.hasActiveApp) {
+                 itemContainer.zoomIn();
+             }
+ 
+             resetHomeScreenPosition();
+ 
+-            WindowPlugin.WindowUtil.unsetAllMinimizedGeometries(root);
+-            WindowPlugin.WindowUtil.minimizeAll();
++            WayfireIpcPlugin.WayfireIPC.showHome();
+ 
+             root.homeTriggered();
+         }
+--- a/containments/homescreens/folio/package/contents/ui/main.qml
++++ b/containments/homescreens/folio/package/contents/ui/main.qml
+@@ -16,6 +16,7 @@
+ import org.kde.plasma.private.mobileshell.state as MobileShellState
+ import org.kde.private.mobile.homescreen.folio 1.0 as Folio
+ import org.kde.plasma.private.mobileshell.windowplugin as WindowPlugin
++import org.kde.plasma.private.mobileshell.wayfireipcplugin as WayfireIpcPlugin
+ import org.kde.plasma.private.mobileshell.shellsettingsplugin as ShellSettings
+ 
+ ContainmentItem {
+@@ -78,7 +79,7 @@
+     }
+ 
+     function homeAction() {
+-        const isInWindow = (!WindowPlugin.WindowUtil.isShowingDesktop && windowMaximizedTracker.showingWindow);
++        const isInWindow = WayfireIpcPlugin.WayfireIPC.hasActiveApp;
+ 
+         // Always close action drawer
+         if (MobileShellState.ShellDBusClient.isActionDrawerOpen) {
+@@ -93,7 +94,7 @@
+                 folio.HomeScreenState.closeAppDrawer();
+                 folio.HomeScreenState.goToPage(0, false);
+ 
+-                WindowPlugin.WindowUtil.minimizeAll();
++                WayfireIpcPlugin.WayfireIPC.showHome();
+             }
+ 
+             // Always ensure settings view is closed
+@@ -179,4 +180,3 @@
+         }
+     }
+ }
+-
+--- a/components/mobileshell/qml/wayfiretweaks/WayfireTweaks.qml
++++ b/components/mobileshell/qml/wayfiretweaks/WayfireTweaks.qml
+@@ -18,6 +18,12 @@
+     property var lastBrightness: 150
+     property bool callActive: ActiveCallModel.active
+ 
++    Binding {
++        target: WayfireIpcPlugin.WayfireIPC
++        property: "navigationEnabled"
++        value: !SessionLockPlugin.SessionLock.locked
++    }
++
+     onCallActiveChanged: {
+          if(callActive && SessionLockPlugin.SessionLock.locked){
+              DpmsPlugin.WlrDpmsManagerV1.pwrOn = true;

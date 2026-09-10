@@ -1,0 +1,3 @@
+# BlueZ runs as root without DAC override; 65-android.rules assigns UHID to system.
+# Android ueventd owns a separate node. Keep native input injection root-only.
+ACTION=="add|change", SUBSYSTEM=="misc", KERNEL=="uhid", OWNER="root", GROUP="root", MODE="0600"

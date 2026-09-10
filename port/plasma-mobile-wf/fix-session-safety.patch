@@ -1,0 +1,228 @@
+From: eqs port maintainers
+Subject: [PATCH] Keep PAM data alive and receive bounded complete Wayfire IPC frames
+
+Base: droidian/plasma-mobile-wf 69444e68c5d59fbcdeb79acc1a49313a4f114148
+Host regression only; ARM64 plugin build and device validation still required.
+
+--- a/components/sessionlockplugin/sessionlock.cpp
++++ b/components/sessionlockplugin/sessionlock.cpp
+@@ -5,26 +5,68 @@
+ #include <QQmlContext>
+ #include <QQmlEngine>
+ #include <QTimer>
++#include <QByteArray>
++#include <cstdlib>
++#include <cstring>
+ 
+ #include <sessionlock.h>
+ 
++struct PamCredentials {
++    const char *username;
++    const char *password;
++};
++
+ static int conversation(int num_msg, const struct pam_message **msg, struct pam_response **resp, void *data)
+ {
+-    Q_UNUSED(msg);
+-    
+-    if (num_msg < 1)
++    if (!resp)
+         return PAM_CONV_ERR;
+-
+-    *resp = static_cast<struct pam_response *>(calloc(num_msg, sizeof(struct pam_response)));
+-
+-    if (*resp == 0)
+-        return PAM_SYSTEM_ERR;
+-
++    *resp = nullptr;
++    if (num_msg < 1 || num_msg > PAM_MAX_NUM_MSG || !msg || !data)
++        return PAM_CONV_ERR;
++    const auto *credentials = static_cast<const PamCredentials *>(data);
++    if (!credentials->username || !credentials->password)
++        return PAM_CONV_ERR;
++
++    auto *responses = static_cast<struct pam_response *>(calloc(num_msg, sizeof(struct pam_response)));
++    if (!responses)
++        return PAM_BUF_ERR;
++
++    int result = PAM_SUCCESS;
+     for (int i = 0; i < num_msg; i++) {
+-        struct pam_response *reply = &(*resp[i]);
+-        reply->resp = strdup((const char*) data);
+-        reply->resp_retcode = 0;
+-    }
++        if (!msg[i]) {
++            result = PAM_CONV_ERR;
++            break;
++        }
++        const char *answer = nullptr;
++        switch (msg[i]->msg_style) {
++        case PAM_PROMPT_ECHO_OFF:
++            answer = credentials->password;
++            break;
++        case PAM_PROMPT_ECHO_ON:
++            answer = credentials->username;
++            break;
++        case PAM_TEXT_INFO:
++        case PAM_ERROR_MSG:
++            continue;
++        default:
++            result = PAM_CONV_ERR;
++            break;
++        }
++        if (result != PAM_SUCCESS)
++            break;
++        responses[i].resp = strdup(answer);
++        if (!responses[i].resp) {
++            result = PAM_BUF_ERR;
++            break;
++        }
++    }
++    if (result != PAM_SUCCESS) {
++        for (int i = 0; i < num_msg; ++i)
++            free(responses[i].resp);
++        free(responses);
++        return result;
++    }
++    *resp = responses;
+     return PAM_SUCCESS;
+ }
+ 
+@@ -123,18 +165,27 @@
+ 
+ int SessionLock::authenticate(QString username, QString ro_password)
+ {
++    if (m_pamh || username.contains(QChar::Null) || ro_password.contains(QChar::Null))
++        return PAM_AUTH_ERR;
+     struct passwd *pw;
+     int ret = 1;
+ 
+     if ((pw = getpwnam(username.toStdString().c_str())) == NULL)
+-        return 2;
+-
+-    const struct pam_conv conv = { conversation, (void *) ro_password.toStdString().c_str() };
+-
+-    if ((ret = pam_start("common-auth", pw->pw_name, &conv, &m_pamh)) != PAM_SUCCESS)
+-        return finish_pam_with(ret);
+-
+-    if ((ret = pam_authenticate(m_pamh, 0)) != PAM_SUCCESS)
++        return PAM_USER_UNKNOWN;
++
++    // Keep both strings alive through pam_end(), including conversation callbacks.
++    const QByteArray user(pw->pw_name);
++    const QByteArray password = ro_password.toUtf8();
++    PamCredentials credentials{user.constData(), password.constData()};
++    const struct pam_conv conv = { conversation, &credentials };
++
++    if ((ret = pam_start("common-auth", user.constData(), &conv, &m_pamh)) != PAM_SUCCESS) {
++        // A failed pam_start does not give the caller a valid handle to end.
++        m_pamh = nullptr;
++        return ret;
++    }
++
++    if ((ret = pam_authenticate(m_pamh, PAM_DISALLOW_NULL_AUTHTOK)) != PAM_SUCCESS)
+         return finish_pam_with(ret);
+ 
+     if ((ret = pam_acct_mgmt(m_pamh, 0)) != PAM_SUCCESS)
+@@ -145,9 +196,11 @@
+ 
+ int SessionLock::finish_pam_with(int value)
+ {
+-    if (pam_end(m_pamh, value) != PAM_SUCCESS)
+-        return 5;
+-    return value;
++    if (!m_pamh)
++        return PAM_SYSTEM_ERR;
++    const int result = pam_end(m_pamh, value);
++    m_pamh = nullptr;
++    return result == PAM_SUCCESS ? value : PAM_SYSTEM_ERR;
+ }
+ 
+ void SessionLock::screenAdded(QScreen *screen)
+--- a/components/wayfireipcplugin/wayfireipc.cpp
++++ b/components/wayfireipcplugin/wayfireipc.cpp
+@@ -2,16 +2,18 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+ #include <QDebug>
++#include <QtEndian>
+ 
+ #include "wayfireipc.h"
++
++// Same bound as the eqs diagnostic IPC client; reject lengths before allocation.
++static constexpr qint64 maxMessageBytes = 1024 * 1024;
+ 
+ WayfireIPC::WayfireIPC(QObject *parent)
+     : QObject{parent}
+ {
+-    m_wfsocket = new QLocalSocket();
+-    m_in.setDevice(m_wfsocket);
+-    m_in.setVersion(QDataStream::Qt_6_7);
+-    m_in.setByteOrder(QDataStream::LittleEndian);
++    m_wfsocket = new QLocalSocket(this);
++    m_wfsocket->setReadBufferSize(maxMessageBytes + 4);
+ 
+     connect(m_wfsocket, &QLocalSocket::readyRead, this, &WayfireIPC::onReadData);
+ 
+@@ -52,13 +54,34 @@
+ 
+ void WayfireIPC::onReadData()
+ {
+-    qint64 bytesToRead = m_wfsocket->bytesAvailable();
+-
+-    while(bytesToRead > 0){
+-        char *data;
+-        m_in.readBytes(data, bytesToRead);
+-
+-        QJsonDocument msg = QJsonDocument::fromJson(QString(data).toUtf8());
++    // Qt sockets are byte streams. Leave an incomplete frame buffered until the
++    // next readyRead, and yield after a bounded batch so input/lock can progress.
++    for (int processed = 0; processed < 32; ++processed) {
++        if (m_wfsocket->bytesAvailable() < 4)
++            return;
++        const QByteArray header = m_wfsocket->peek(4);
++        if (header.size() != 4) {
++            qWarning() << "Cannot read Wayfire IPC header; disconnecting";
++            m_wfsocket->abort();
++            return;
++        }
++        const quint32 size = qFromLittleEndian<quint32>(header.constData());
++        if (size == 0 || size > maxMessageBytes) {
++            qWarning() << "Invalid Wayfire IPC frame length; disconnecting";
++            m_wfsocket->abort();
++            return;
++        }
++        if (m_wfsocket->bytesAvailable() < 4 + qint64(size))
++            return;
++        m_wfsocket->read(4);
++        const QByteArray data = m_wfsocket->read(size);
++        QJsonParseError error;
++        const QJsonDocument msg = QJsonDocument::fromJson(data, &error);
++        if (data.size() != size || error.error != QJsonParseError::NoError || !msg.isObject()) {
++            qWarning() << "Invalid Wayfire IPC JSON; disconnecting";
++            m_wfsocket->abort();
++            return;
++        }
+ 
+         QString event = msg.object().value("event").toString();
+         QString appId = msg.object().value("view").toObject().value("app-id").toString();
+@@ -76,9 +99,8 @@
+             setFullscreen(viewId, false);
+         }
+ 
+-        bytesToRead = m_wfsocket->bytesAvailable();
+-        delete data;
+     }
++    QMetaObject::invokeMethod(this, "onReadData", Qt::QueuedConnection);
+ }
+ 
+ void WayfireIPC::sendMessage(QJsonDocument jsonDoc)
+--- a/components/wayfireipcplugin/wayfireipc.h
++++ b/components/wayfireipcplugin/wayfireipc.h
+@@ -33,5 +33,4 @@
+     void sendMessage(QJsonDocument jsonDoc);
+ 
+     QLocalSocket *m_wfsocket = nullptr;
+-    QDataStream m_in;
+ };
+\ No newline at end of file

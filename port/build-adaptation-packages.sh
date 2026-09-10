@@ -83,7 +83,17 @@ docker run --rm --user "$(id -u):$(id -g)" \
             test -f "$control/control"
             ! find "$control" -maxdepth 1 -type f \( -name preinst -o -name postinst -o -name prerm -o -name postrm -o -name config -o -name triggers \) -print -quit | grep -q .
         done
-        test "$(find "$inspection/configs-data" -type f | wc -l)" = 2
+        test "$(find "$inspection/configs-data" -type f | wc -l)" = 6
+        test "$(find "$inspection/configs-data" -type l | wc -l)" = 1
+        test "$(readlink "$inspection/configs-data"/usr/lib/droid-vendor-overlay/etc/media_profiles_vendor.xml)" = media_profiles_cape.xml
+        cmp /source/usr/bin/droid/droid-get-bt-address.sh "$inspection/configs-data"/usr/bin/droid/droid-get-bt-address.sh
+        test "$(stat -c "%a" "$inspection/configs-data"/usr/bin/droid/droid-get-bt-address.sh)" = 755
+        cmp /source/usr/lib/udev/rules.d/80-eqs-bluetooth.rules "$inspection/configs-data"/usr/lib/udev/rules.d/80-eqs-bluetooth.rules
+        test "$(stat -c "%a" "$inspection/configs-data"/usr/lib/udev/rules.d/80-eqs-bluetooth.rules)" = 644
+        cmp /source/etc/pulse/arm_droid_card_custom.pa "$inspection/configs-data"/etc/pulse/arm_droid_card_custom.pa
+        test "$(stat -c "%a" "$inspection/configs-data"/etc/pulse/arm_droid_card_custom.pa)" = 644
+        cmp /source/usr/lib/udev/rules.d/80-eqs-gpu.rules "$inspection/configs-data"/usr/lib/udev/rules.d/80-eqs-gpu.rules
+        test "$(stat -c "%a" "$inspection/configs-data"/usr/lib/udev/rules.d/80-eqs-gpu.rules)" = 644
         dpkg-deb -c "$configs" | grep -Eq "^-rw-r--r-- root/root +[0-9]+ .* ./etc/systemd/system/android-mount.service.d/30-eqs-utags.conf$"
         dpkg-deb -c "$configs" | grep -Eq "^-rw-r--r-- root/root +[0-9]+ .* ./usr/lib/droidian/device/preferred-hostname$"
         test "$(stat -c "%a" "$inspection/configs-data"/usr/lib/droidian/device/preferred-hostname)" = 644

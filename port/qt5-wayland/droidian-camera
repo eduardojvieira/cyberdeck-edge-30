@@ -1,0 +1,10 @@
+#!/bin/sh
+# Use the tested Qt5 client only for Camera, never for the desktop or other apps.
+lib="$HOME/.local/opt/eqs-camera-qt5-5.15.15/lib"
+if [ "$(dpkg-query -W -f='${Version}' libqt5waylandclient5 2>/dev/null)" = '5.15.15-3' ] &&
+   [ -f "$lib/libQt5WaylandClient.so.5" ]; then
+    export LD_LIBRARY_PATH="$lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+else
+    printf '%s\n' 'Camera: using system Qt5; the eqs orientation fix needs rebuilding after a QtWayland update.' >&2
+fi
+exec /usr/bin/droidian-camera "$@"

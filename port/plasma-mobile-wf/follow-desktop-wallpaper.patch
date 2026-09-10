@@ -1,0 +1,38 @@
+--- a/contents/ui/main.qml
++++ b/contents/ui/main.qml
+@@ -10,9 +10,27 @@
+ import org.kde.plasma.core as PlasmaCore
+ import org.kde.plasma.wallpapers.image as Wallpaper
+ import org.kde.plasma.plasmoid
++import org.kde.plasma.private.mobileshell.sessionlockplugin as EqsLock
+ 
+ WallpaperItem {
+     id: root
++
++    // Follow the resolved image, including KPackage variants and color-scheme changes.
++    // The lock keeps its own authentication/input; only its background setting changes.
++    function syncLockWallpaper() {
++        const url = imageView.modelImage.toString();
++        if (url.startsWith("file:///")) {
++            const path = url.substring(7); // Keep URL escaping for the lock's "file:" prefix.
++            if (EqsLock.SessionLockSettings.wallpaperFile !== path) {
++                EqsLock.SessionLockSettings.wallpaperFile = path;
++            }
++        }
++    }
++
++    Connections {
++        target: imageView.mediaProxy
++        function onModelImageChanged() { root.syncLockWallpaper(); }
++    }
+ 
+     // used by WallpaperInterface for drag and drop
+     onOpenUrlRequested: (url) => {
+@@ -54,6 +72,7 @@
+     }
+ 
+     Component.onCompleted: {
++        root.syncLockWallpaper();
+         // In case plasmashell crashes when the config dialog is opened
+         root.configuration.PreviewImage = "null";
+         root.loading = true; // delays ksplash until the wallpaper has been loaded

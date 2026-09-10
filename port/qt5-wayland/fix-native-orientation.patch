@@ -1,0 +1,14 @@
+--- a/src/client/qwaylandscreen_p.h
++++ b/src/client/qwaylandscreen_p.h
+@@ -98,6 +98,11 @@
+ 
+     void setOrientationUpdateMask(Qt::ScreenOrientations mask) override;
+ 
++    Qt::ScreenOrientation nativeOrientation() const override
++    {
++        // wl_output mode is untransformed; xdg-output geometry follows rotation.
++        return mGeometry.height() > mGeometry.width() ? Qt::PortraitOrientation : Qt::LandscapeOrientation;
++    }
+     Qt::ScreenOrientation orientation() const override;
+     int scale() const;
+     qreal devicePixelRatio() const override;

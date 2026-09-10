@@ -1,0 +1,2 @@
+# eqs stock A14 keeps its policy in sku_cape, outside module-droid-card defaults.
+load-module module-droid-card rate=48000 voice_virtual_stream=true config=/vendor/etc/audio/sku_cape/audio_policy_configuration.xml

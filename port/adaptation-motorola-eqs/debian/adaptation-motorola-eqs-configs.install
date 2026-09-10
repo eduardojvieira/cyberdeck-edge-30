@@ -1,2 +1,7 @@
 etc/systemd/system/android-mount.service.d/30-eqs-utags.conf etc/systemd/system/android-mount.service.d/
 usr/lib/droidian/device/preferred-hostname usr/lib/droidian/device/
+usr/lib/udev/rules.d/80-eqs-gpu.rules usr/lib/udev/rules.d/
+etc/pulse/arm_droid_card_custom.pa etc/pulse/
+usr/lib/droid-vendor-overlay/etc/media_profiles_vendor.xml usr/lib/droid-vendor-overlay/etc/
+usr/bin/droid/droid-get-bt-address.sh usr/bin/droid/
+usr/lib/udev/rules.d/80-eqs-bluetooth.rules usr/lib/udev/rules.d/

@@ -1,0 +1,69 @@
+--- a/tests/auto/client/xdgoutput/tst_xdgoutput.cpp
++++ b/tests/auto/client/xdgoutput/tst_xdgoutput.cpp
+@@ -55,6 +55,7 @@
+     void primaryScreen();
+     void overrideGeometry();
+     void changeGeometry();
++    void nativeOrientation();
+     void outputCreateEnterRace();
+ };
+ 
+@@ -169,5 +170,58 @@
+     m_config.autoEnter = true;
+ }
+ 
++// The panel mode stays portrait while xdg-output geometry rotates.
++// Qt Multimedia's autoOrientation must use that fixed native reference.
++void tst_xdgoutput::nativeOrientation()
++{
++    auto *screen = QGuiApplication::primaryScreen();
++    const auto original = exec([&] { return output()->m_data; });
++    const auto originalGeometry = exec([&] { return xdgOutput()->m_logicalGeometry; });
++    screen->setOrientationUpdateMask(Qt::PortraitOrientation | Qt::LandscapeOrientation
++                                    | Qt::InvertedPortraitOrientation | Qt::InvertedLandscapeOrientation);
++    const Qt::ScreenOrientation orientations[] = {
++        Qt::PortraitOrientation, Qt::InvertedLandscapeOrientation,
++        Qt::InvertedPortraitOrientation, Qt::LandscapeOrientation
++    };
++    // Exercise a portrait panel, a landscape monitor and repeated rotations.
++    // No camera, physical output, or input devices are opened by this mock server.
++    for (bool portrait : {true, false}) {
++        const QSize mode = portrait ? QSize(1080, 2400) : QSize(2400, 1080);
++        const auto native = portrait ? Qt::PortraitOrientation : Qt::LandscapeOrientation;
++        for (int transform : {0, 1, 2, 3, 0, 3, 2, 1, 0}) {
++            const QSize logical = (transform % 2 ? mode.transposed() : mode) / 2;
++            exec([&] {
++                auto *o = output();
++                o->m_data.mode.resolution = mode;
++                o->m_data.transform = static_cast<OutputData::Transform>(transform);
++                o->send_mode(o->resourceMap().value(client())->handle,
++                             Output::mode_current, mode.width(), mode.height(), 60000);
++                o->sendScale(2);
++                o->sendGeometry();
++                xdgOutput()->sendLogicalSize(logical);
++                o->sendDone();
++            });
++            QTRY_COMPARE(screen->size(), logical);
++            const auto orientation = orientations[(transform + (portrait ? 0 : 3)) % 4];
++            QTRY_COMPARE(screen->orientation(), orientation);
++            QCOMPARE(screen->nativeOrientation(), native);
++            // This is the exact calculation used by Qt5's orientation handler.
++            const int compensation = (360 - screen->angleBetween(screen->nativeOrientation(), orientation)) % 360;
++            QCOMPARE(compensation, (360 - transform * 90) % 360);
++        }
++    }
++    exec([&] {
++        auto *o = output();
++        o->m_data = original;
++        o->send_mode(o->resourceMap().value(client())->handle, Output::mode_current,
++                     original.mode.resolution.width(), original.mode.resolution.height(), 60000);
++        o->sendScale(original.scale);
++        o->sendGeometry();
++        xdgOutput()->sendLogicalSize(originalGeometry.size());
++        o->sendDone();
++    });
++    QTRY_COMPARE(screen->size(), originalGeometry.size());
++}
++
+ QCOMPOSITOR_TEST_MAIN(tst_xdgoutput)
+ #include "tst_xdgoutput.moc"

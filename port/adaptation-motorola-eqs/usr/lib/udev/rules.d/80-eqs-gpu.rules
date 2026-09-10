@@ -1,0 +1,2 @@
+# Native Adreno clients need the GPU node; Android ueventd owns a different /dev.
+ACTION=="add|change", KERNEL=="kgsl-3d0", OWNER="root", GROUP="render", MODE="0660"

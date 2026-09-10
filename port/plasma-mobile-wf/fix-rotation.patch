@@ -1,0 +1,302 @@
+--- a/quicksettings/screenrotation/screenrotationutil.h
++++ b/quicksettings/screenrotation/screenrotationutil.h
+@@ -1,36 +1,27 @@
+ // SPDX-FileCopyrightText: 2022-2023 Devin Lin <devin@kde.org>
+ // SPDX-License-Identifier: GPL-2.0-or-later
+-
+ #pragma once
+-
+ #include <QObject>
+-#include <QOrientationSensor>
+-
+-#include <kscreen/config.h>
++#include <QFileSystemWatcher>
+ 
+ class ScreenRotationUtil : public QObject
+ {
+     Q_OBJECT
+-    Q_PROPERTY(bool autoScreenRotationEnabled READ autoScreenRotationEnabled WRITE setAutoScreenRotationEnabled NOTIFY autoScreenRotationEnabledChanged);
+-    Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged);
+-
++    Q_PROPERTY(bool autoScreenRotationEnabled READ autoScreenRotationEnabled WRITE setAutoScreenRotationEnabled NOTIFY autoScreenRotationEnabledChanged)
++    Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
+ public:
+     ScreenRotationUtil(QObject *parent = nullptr);
+-
+     bool autoScreenRotationEnabled();
+     void setAutoScreenRotationEnabled(bool value);
+-
+     bool isAvailable();
+-
+ Q_SIGNALS:
+     void autoScreenRotationEnabledChanged();
+     void availableChanged();
+-
+ private:
++    void reload();
+     void actuallySetAutoScreenRotationEnabled(bool value);
+-
+-    KScreen::ConfigPtr m_config{nullptr};
+-    QOrientationSensor *m_sensor{nullptr};
+-
++    QString m_path;
++    QFileSystemWatcher m_watcher;
++    bool m_enabled{false};
+     bool m_available{false};
+ };
+--- a/quicksettings/screenrotation/screenrotationutil.cpp
++++ b/quicksettings/screenrotation/screenrotationutil.cpp
+@@ -1,102 +1,173 @@
+ // SPDX-FileCopyrightText: 2022-2023 Devin Lin <devin@kde.org>
+ // SPDX-License-Identifier: GPL-2.0-or-later
+-
+ #include "screenrotationutil.h"
+-
+-#include <fcntl.h>
+-#include <unistd.h>
+-
+-#include <kscreen/configmonitor.h>
+-#include <kscreen/getconfigoperation.h>
+-#include <kscreen/output.h>
+-#include <kscreen/setconfigoperation.h>
+-
+ #include <QDebug>
+-#include <QOrientationSensor>
++#include <QFile>
++#include <QFileInfo>
++#include <QGuiApplication>
++#include <QScreen>
++#include <QSaveFile>
++#include <QStandardPaths>
+ #include <QTimer>
+ 
+-ScreenRotationUtil::ScreenRotationUtil(QObject *parent)
+-    : QObject{parent}
+-    , m_config{nullptr}
+-    , m_sensor{new QOrientationSensor(this)}
++namespace {
++// Wayfire's INI is not KConfig: rewriting it with QSettings/KConfig corrupts
++// literal backslashes in colors. Change only the two rotation options.
++struct IniOption {
++    bool section{false}, found{false};
++    qsizetype offset{0}, length{0};
++    QByteArray value;
++};
++
++bool findOption(const QByteArray &bytes, const QByteArray &section,
++                const QByteArray &key, IniOption &option)
+ {
+-    connect(m_sensor, &QOrientationSensor::activeChanged, this, &ScreenRotationUtil::availableChanged);
+-
+-    connect(KScreen::ConfigMonitor::instance(), &KScreen::ConfigMonitor::configurationChanged, this, [this]() {
+-        Q_EMIT autoScreenRotationEnabledChanged();
+-    });
+-
+-    connect(new KScreen::GetConfigOperation(), &KScreen::GetConfigOperation::finished, this, [this](auto *op) {
+-        m_config = qobject_cast<KScreen::GetConfigOperation *>(op)->config();
+-        KScreen::ConfigMonitor::instance()->addConfig(m_config);
+-
+-        // update all screens with event connect
+-        for (KScreen::OutputPtr output : m_config->outputs()) {
+-            connect(output.data(), &KScreen::Output::autoRotatePolicyChanged, this, &ScreenRotationUtil::autoScreenRotationEnabledChanged);
++    bool inside = false;
++    option.offset = bytes.size();
++    for (qsizetype pos = 0; pos < bytes.size();) {
++        const auto newline = bytes.indexOf('\n', pos);
++        const auto end = newline < 0 ? bytes.size() : newline;
++        const auto line = bytes.mid(pos, end - pos).trimmed();
++        if (line.startsWith('[') && line.endsWith(']')) {
++            if (inside && !option.found) option.offset = pos;
++            inside = line == '[' + section + ']';
++            if (inside) {
++                if (option.section) return false;
++                option.section = true;
++            }
++        } else if (inside && !line.startsWith('#') && !line.startsWith(';')) {
++            const auto equals = line.indexOf('=');
++            if (equals >= 0 && line.left(equals).trimmed() == key) {
++                if (option.found) return false;
++                option.found = true;
++                option.value = line.mid(equals + 1).trimmed();
++                option.offset = pos;
++                option.length = end - pos;
++            }
+         }
+-
+-        // listen to all new screens and connect
+-        connect(m_config.data(), &KScreen::Config::outputAdded, this, [this](const auto &output) {
+-            Q_EMIT autoScreenRotationEnabledChanged();
+-            connect(output.data(), &KScreen::Output::autoRotatePolicyChanged, this, &ScreenRotationUtil::autoScreenRotationEnabledChanged);
+-        });
+-
+-        // trigger update
+-        Q_EMIT autoScreenRotationEnabledChanged();
+-    });
+-}
+-
+-bool ScreenRotationUtil::autoScreenRotationEnabled()
+-{
+-    if (!m_config) {
+-        return false;
++        pos = end + 1;
+     }
+-    const auto outputs = m_config->outputs();
+-
+-    for (KScreen::OutputPtr output : outputs) {
+-        if (output->autoRotatePolicy() == KScreen::Output::AutoRotatePolicy::Never) {
+-            return false;
+-        }
+-    }
+-
+     return true;
+ }
+ 
++void replaceOption(QByteArray &bytes, const IniOption &option, const QByteArray &section,
++                   const QByteArray &key, const QByteArray &value)
++{
++    QByteArray replacement = key + " = " + value;
++    if (!option.found) {
++        replacement += '\n';
++        if (!option.section) replacement.prepend("\n[" + section + "]\n");
++        if (option.offset > 0 && bytes[option.offset - 1] != '\n') replacement.prepend('\n');
++    }
++    bytes.replace(option.offset, option.length, replacement);
++}
++
++bool readRotation(const QString &path, QByteArray &bytes, bool &locked,
++                  IniOption &lock, IniOption &transform)
++{
++    const QFileInfo info(path);
++    QFile file(path);
++    if (!info.isFile() || info.isSymLink() || !info.isWritable() || info.size() > 128 * 1024
++        || !file.open(QIODevice::ReadOnly)) {
++        return false;
++    }
++    bytes = file.read(128 * 1024 + 1);
++    if (file.error() != QFile::NoError || bytes.size() > 128 * 1024 || bytes.contains('\0')) {
++        return false;
++    }
++    if (!findOption(bytes, "autorotate-iio", "lock_rotation", lock)
++        || !findOption(bytes, "output:HWCOMPOSER-1", "transform", transform)) return false;
++    if (lock.found && lock.value != "true" && lock.value != "false") return false;
++    // This port has one native-portrait panel and no mirrored outputs.
++    if (transform.found && transform.value != "auto" && transform.value != "normal"
++        && transform.value != "90" && transform.value != "180" && transform.value != "270") return false;
++    locked = lock.value == "true"; // absent = autorotate-iio's default, false
++    return true;
++}
++
++QByteArray currentTransform()
++{
++    if (!qobject_cast<QGuiApplication *>(QCoreApplication::instance())) return {};
++    for (auto *screen : QGuiApplication::screens()) {
++        if (screen->name() != QStringLiteral("HWCOMPOSER-1")) continue;
++        // Inverse of QtWayland 6.8's toScreenOrientation() for eqs's portrait panel.
++        // This is the compositor's actual orientation, not the accelerometer.
++        switch (screen->orientation()) {
++        case Qt::PortraitOrientation: return "normal";
++        case Qt::InvertedLandscapeOrientation: return "90";
++        case Qt::InvertedPortraitOrientation: return "180";
++        case Qt::LandscapeOrientation: return "270";
++        default: return {};
++        }
++    }
++    return {};
++}
++}
++
++ScreenRotationUtil::ScreenRotationUtil(QObject *parent) : QObject(parent)
++{
++    m_path = qEnvironmentVariable("WAYFIRE_CONFIG_FILE");
++    if (m_path.isEmpty()) {
++        m_path = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
++            + QStringLiteral("/plasma-mobile-wf/wayfire.ini");
++    }
++    connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, &ScreenRotationUtil::reload);
++    connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, &ScreenRotationUtil::reload);
++    m_watcher.addPath(QFileInfo(m_path).absolutePath());
++    reload();
++}
++
++void ScreenRotationUtil::reload()
++{
++    if (QFileInfo::exists(m_path) && !m_watcher.files().contains(m_path)) m_watcher.addPath(m_path);
++    QByteArray bytes;
++    bool locked = true;
++    IniOption lock, transform;
++    const bool available = readRotation(m_path, bytes, locked, lock, transform);
++    const bool enabled = available && !locked;
++    if (available != m_available) {
++        m_available = available;
++        Q_EMIT availableChanged();
++    }
++    if (enabled != m_enabled) {
++        m_enabled = enabled;
++        Q_EMIT autoScreenRotationEnabledChanged();
++    }
++}
++
++bool ScreenRotationUtil::autoScreenRotationEnabled() { return m_enabled; }
++bool ScreenRotationUtil::isAvailable() { return m_available; }
++
+ void ScreenRotationUtil::setAutoScreenRotationEnabled(bool value)
+ {
+-    // Don't execute immediately, in case the screen rotation
+-    // deletes the caller mid-function call, causing a crash.
+-    QTimer::singleShot(0, this, [this, value]() {
+-        actuallySetAutoScreenRotationEnabled(value);
+-    });
+-}
+-
+-bool ScreenRotationUtil::isAvailable()
+-{
+-    return m_sensor->connectToBackend();
++    // Rotation can destroy the QML caller: preserve the upstream deferred setter.
++    QTimer::singleShot(0, this, [this, value]() { actuallySetAutoScreenRotationEnabled(value); });
+ }
+ 
+ void ScreenRotationUtil::actuallySetAutoScreenRotationEnabled(bool value)
+ {
+-    if (!m_config) {
++    QByteArray bytes;
++    bool locked = true;
++    IniOption lock, transform;
++    if (!readRotation(m_path, bytes, locked, lock, transform)) {
++        qWarning() << "Cannot read valid Wayfire rotation config:" << m_path;
++        reload();
+         return;
+     }
+-
+-    KScreen::Output::AutoRotatePolicy policy = value ? KScreen::Output::AutoRotatePolicy::Always : KScreen::Output::AutoRotatePolicy::Never;
+-
+-    const auto outputs = m_config->outputs();
+-    for (KScreen::OutputPtr output : outputs) {
+-        if (!output) {
+-            continue;
+-        }
+-
+-        if (output->autoRotatePolicy() != policy) {
+-            output->setAutoRotatePolicy(policy);
+-        }
++    if (locked == !value) return;
++    const auto orientation = currentTransform();
++    if (orientation.isEmpty()) {
++        qWarning() << "Cannot preserve HWCOMPOSER-1 orientation; rotation unchanged";
++        return;
+     }
+-
+-    auto setop = new KScreen::SetConfigOperation(m_config, this);
+-    setop->exec();
+-
+-    Q_EMIT autoScreenRotationEnabledChanged();
++    replaceOption(bytes, lock, "autorotate-iio", "lock_rotation", value ? "false" : "true");
++    // Re-find after the first edit, including when both keys were missing at EOF.
++    IniOption updatedTransform;
++    if (!findOption(bytes, "output:HWCOMPOSER-1", "transform", updatedTransform)) return;
++    replaceOption(bytes, updatedTransform, "output:HWCOMPOSER-1", "transform", orientation);
++    QSaveFile file(m_path); // Atomic rename also triggers Wayfire's config reload.
++    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
++        qWarning() << "Cannot save Wayfire rotation config:" << file.errorString();
++    }
++    reload();
+ }

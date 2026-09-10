@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.2
+Type=Application
+Name=Camera
+Exec=/home/droidian/.local/bin/droidian-camera
+TryExec=/home/droidian/.local/bin/droidian-camera
+Icon=camera-app
+Terminal=false
+StartupNotify=false
+Comment=Take photos and videos
+Categories=AudioVideo;Video;Photography
