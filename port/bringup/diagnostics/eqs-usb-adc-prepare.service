@@ -1,0 +1,15 @@
+[Unit]
+Description=Prepare one-boot H29 charger telemetry in RAM
+DefaultDependencies=no
+Before=systemd-modules-load.service systemd-udevd.service systemd-udev-trigger.service sysinit.target shutdown.target
+Conflicts=shutdown.target
+ConditionPathExists=/var/lib/eqs-usb-adc/armed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/eqs-usb-adc-prepare
+TimeoutStartSec=15s
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

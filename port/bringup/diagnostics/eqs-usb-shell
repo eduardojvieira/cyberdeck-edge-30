@@ -1,0 +1,18 @@
+#!/bin/sh
+# Bootstrap only: bounded by capture's timeout, direct USB, never a daily service.
+set -eu
+[ "$(id -u)" = 0 ]
+G=/sys/kernel/config/usb_gadget/eqs-debug
+[ "$(cat "$G/UDC")" = a600000.dwc3 ]
+[ "$(cat /sys/class/usb_role/a600000.ssusb-role-switch/role)" = device ]
+test -s /etc/dropbear/dropbear_ecdsa_host_key
+test -s /root/.ssh/authorized_keys
+interface=$(cat "$G/functions/rndis.usb0/ifname")
+case "$interface" in usb*) ;; *) echo 'Unexpected diagnostic interface' >&2; exit 1;; esac
+number=${interface#usb}
+case "$number" in ''|*[!0-9]*) echo 'Unexpected diagnostic interface' >&2; exit 1;; esac
+ip -6 address add fe80::2/64 dev "$interface" nodad
+# Existing 2016.74 binary is temporary: replace with maintained SSH for daily use.
+# No default/wildcard listener, generated identity, password, or TCP forwarding.
+exec /usr/local/libexec/eqs-dropbear-2016.74 -F -E -s -j -k -I 35 \
+    -r /etc/dropbear/dropbear_ecdsa_host_key -p "[fe80::2%$interface]:22" -P /run/eqs-usb-shell.pid

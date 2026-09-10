@@ -1,0 +1,13 @@
+#!/bin/sh
+# Diagnostic session on the existing PAM/systemd user bus, not a second D-Bus.
+set -eu
+: "${HOME:?}" "${XDG_RUNTIME_DIR:?}"
+test -S "$XDG_RUNTIME_DIR/bus"
+test "$(stat -c %u "$XDG_RUNTIME_DIR/bus")" = "$(id -u)"
+test -f "$HOME/.config/plasma-mobile-wf/wayfire.ini"
+# A working user bus otherwise enables the snapshot's KWin systemd target.
+test "$(cat "$HOME/.config/startkderc")" = "$(printf '[General]\nsystemdBoot=false')"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+export KDE_NO_KWIN=1
+export KSCREEN_BACKEND=KSC_QScreen.so KSCREEN_BACKEND_INPROCESS=KSC_QScreen.so
+exec /usr/bin/wayfire -c "$HOME/.config/plasma-mobile-wf/wayfire.ini"

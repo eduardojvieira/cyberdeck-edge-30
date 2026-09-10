@@ -1,0 +1,8 @@
+# eqs RETAR Android14 U1SQS34.52-21-1-16. Private stock blobs, not included here.
+# a730*: modem_a/NON-HLOS.bin (ext4), image/. GMU: vendor_a, firmware/.
+e67d1829f57fc8326d806234b932dc3b78e28a9940df34c70752f17d5f38b7aa  a730_sqe.fw
+9cd65a08fa2ce72c05a52aad95951f749f52fc310613a2857e270b463a641a7f  a730_zap.b00
+1fc98f97cf354b9704b20d0848f7b2739638539a57d88ecf5cc71ca1c5c4e6b9  a730_zap.b01
+c44fd0b0600927b9efd7d82cfdc1935eb844089736c1935f6cb3688ff64030dc  a730_zap.b02
+da8de71f35d53ec7cf107f02eb760210e41ef9974dfe6963cded7d0abb7c2912  a730_zap.mdt
+b2d3f0e2a98fd6259ab9ffef16df63265542e6cc9a970d53d476e823d432042a  gmu_gen70000.bin

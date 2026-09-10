@@ -1,0 +1,22 @@
+#!/bin/sh
+# Run only as qmlkonsole's child, never use chroot output as native PTY proof.
+set -eu
+test -t 0
+test -t 1
+test -t 2
+test "$(cat /proc/1/comm)" = systemd
+test "$(id -un)" = droidian
+umask 077
+directory="$HOME/.local/state/eqs-bringup"
+mkdir -p "$directory"
+{
+    uname -r
+    id -un
+    tty
+    printf 'TERM=%s\n' "${TERM:-unset}"
+    if command -v tmux >/dev/null 2>&1; then tmux -V; else echo TMUX_NOT_INSTALLED; fi
+    echo NATIVE_TERMINAL_PTY_OK
+} > "$directory/terminal.txt"
+cat "$directory/terminal.txt"
+printf '\033[38;2;80;220;140mDroidian + Plasma Mobile: terminal native\033[0m\n'
+sleep 60

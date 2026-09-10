@@ -1,0 +1,16 @@
+[Unit]
+Description=One-shot H29 USB2 root-port status capture
+ConditionPathExists=/etc/eqs-usb-host-test.once
+After=systemd-journald.service systemd-udev-trigger.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/rm -f /etc/eqs-usb-host-test.once
+ExecStart=/usr/local/sbin/eqs-usb-host-test
+RuntimeMaxSec=20min
+TimeoutStopSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -27,7 +27,7 @@ targets=("$@")
 if [[ ${#targets[@]} -eq 0 ]]; then
     targets=(dtbs)
 fi
-dev_thinlto=0
+dev_thinlto=1
 exact_image=0
 display_modules=0
 touch_modules=0
@@ -67,8 +67,9 @@ for target in "${targets[@]}"; do
         *) fail "unsupported target: $target (supported: dtbs, Image, Image-dev-thinlto, modules-dev-display, modules-dev-touch, modules-dev-functional, dt-images-dev)" ;;
     esac
 done
-if (( dev_thinlto && exact_image )); then
-    fail 'Image and Image-dev-thinlto cannot be combined'
+if (( exact_image )); then
+    [[ ${#targets[@]} == 1 ]] || fail 'Full LTO Image must be built separately'
+    dev_thinlto=0
 fi
 if (( (display_modules || touch_modules || functional_modules) && ${#targets[@]} != 1 )); then
     fail 'module build targets cannot be combined with other targets'
@@ -76,7 +77,7 @@ fi
 
 reference_repos="$repo_root/reference/repos"
 references="$reference_repos/eqs-development"
-worktree="$repo_root/.work/eqs-kernel"
+worktree=$(readlink -m -- "${EQS_KERNEL_WORKDIR:-$repo_root/.work/eqs-kernel}")
 
 check_repo() {
     local name=$1 path=$2 commit=$3 actual status
@@ -123,7 +124,7 @@ vendor_link="$worktree/kernel/arch/arm64/boot/dts/vendor"
 [[ "$(readlink -f "$vendor_link")" == "$worktree/sm8475-devicetrees" ]] || \
     fail "kernel vendor devicetree link does not resolve to staged devicetrees"
 
-docker build --tag "$IMAGE" "$script_dir"
+docker image inspect "$IMAGE" >/dev/null || fail "local build image unavailable; build port/kernel/Dockerfile explicitly before retrying"
 mkdir -p "$worktree/out"
 
 docker run --rm \
@@ -149,24 +150,9 @@ docker run --rm \
             "KBUILD_BUILD_TIMESTAMP=$build_timestamp"
         )
         dtc_includes="/build/sm8475-modules/qcom/opensource/audio-kernel/include /build/sm8475-modules/qcom/opensource/camera-kernel"
-        fragments=(
-            /build/out/.config
-            /build/kernel/arch/arm64/configs/vendor/waipio_GKI.config
-            /build/kernel/arch/arm64/configs/vendor/ext_config/moto-waipio.config
-            /build/kernel/arch/arm64/configs/vendor/ext_config/moto-waipio-gki.config
-            /build/kernel/arch/arm64/configs/vendor/ext_config/moto-waipio-eqs.config
-        )
-        if [[ "$EQS_DEV_THINLTO" == 1 ]]; then
-            fragments+=(/scripts/eqs-dev-thinlto.config)
-        fi
-
-        make -C /build/kernel O=/build/out "${common[@]}" gki_defconfig
-        (
-            cd /build/out
-            KCONFIG_CONFIG=/build/out/.config /build/kernel/scripts/kconfig/merge_config.sh -m -O /build/out \
-                "${fragments[@]}"
-        )
-        make -C /build/kernel O=/build/out "${common[@]}" olddefconfig
+        profile=full
+        [[ "$EQS_DEV_THINLTO" != 1 ]] || profile=thinlto
+        bash /scripts/resolve-eqs-config.sh --resolve /build/kernel /build/out "$profile"
         if [[ "$EQS_DEV_THINLTO" == 1 ]]; then
             rm -f /build/out/arch/arm64/boot/Image
             common+=(LD=/usr/local/bin/ld.lld-single-thread)
@@ -277,29 +263,29 @@ docker run --rm \
                 make -j1 -C /build/kernel O=/build/out "${common[@]}" M="$wlan" WLAN_ROOT="$wlan/.qca6490" WLAN_COMMON_ROOT=cmn WLAN_FW_API="$wlan_root/fw-api" WLAN_PROFILE=qca6490 DYNAMIC_SINGLE_CHIP=qca6490 MODNAME=qca_cld3_qca6490 DEVNAME=qca6490 WLAN_CTRL_NAME=wlan CONFIG_QCA_CLD_WLAN=m BOARD_PLATFORM=waipio modules
                 make -j1 -C /build/kernel O=/build/out "${common[@]}" M="$ulog" KERNEL_SRC=/build/kernel modules
                 make -j1 -C /build/kernel O=/build/out "${common[@]}" M="$charger" KERNEL_SRC=/build/kernel KBUILD_EXTRA_SYMBOLS="$info/Module.symvers" modules
-                make -j1 -C /build/kernel O=/build/out "${common[@]}" M="$glink_charger" KERNEL_SRC=/build/kernel KBUILD_EXTRA_SYMBOLS="$charger/Module.symvers $ulog/Module.symvers" modules
+                make -j1 -C /build/kernel O=/build/out "${common[@]}" M="$glink_charger" KERNEL_SRC=/build/kernel KBUILD_EXTRA_SYMBOLS="$charger/Module.symvers $ulog/Module.symvers" CONFIG_WIRELESS_CPS4035B=m modules
                 make -j1 -C /build/kernel O=/build/out "${common[@]}" M="$adaptive_charge" KERNEL_SRC=/build/kernel KBUILD_EXTRA_SYMBOLS="$charger/Module.symvers" CONFIG_USE_MMI_CHARGER=y modules
                 make -j1 -C /build/kernel O=/build/out "${common[@]}" M="$utag" KERNEL_SRC=/build/kernel modules
+
+                # Operational eqs audio/camera, not just the recovery module set.
+                git -C /build/sm8475-modules archive HEAD \
+                    qcom/opensource/audio-kernel qcom/opensource/camera-kernel qcom/opensource/eva-kernel \
+                    motorola/drivers/regulator/wl2868c | tar -x -C "$module_root"
+                audio="$module_root/qcom/opensource/audio-kernel"
+                camera="$module_root/qcom/opensource/camera-kernel"
+                camera_pmic="$module_root/motorola/drivers/regulator/wl2868c"
+                eva="$module_root/qcom/opensource/eva-kernel"
+                make -j1 -C /build/kernel O=/build/out "${common[@]}" M="$audio" KERNEL_SRC=/build/kernel AUDIO_ROOT="$audio" MODNAME=audio_dlkm BOARD_PLATFORM=waipio CONFIG_SND_SOC_WAIPIO=m TARGET_PRODUCT=eqs TARGET_BUILD_VARIANT=userdebug modules
+                make -j1 -C /build/kernel O=/build/out "${common[@]}" M="$camera" KERNEL_SRC=/build/kernel KERNEL_ROOT=/build/kernel CAMERA_KERNEL_ROOT="$camera" MODNAME=camera TARGET_PRODUCT=eqs TARGET_BUILD_VARIANT=userdebug KBUILD_EXTRA_SYMBOLS="$mmrm/Module.symvers" modules
+                make -j1 -C /build/kernel O=/build/out "${common[@]}" M="$camera_pmic" KERNEL_SRC=/build/kernel modules
+                make -j1 -C /build/kernel O=/build/out "${common[@]}" M="$eva" KERNEL_SRC=/build/kernel EVA_ROOT="$eva" KBUILD_EXTRA_SYMBOLS="$mmrm/Module.symvers" modules
             fi
         fi
     ' build-host-artifacts "${build_targets[@]}"
 
-for expected in \
-    CONFIG_EQS_DTB=y \
-    CONFIG_SCSI_UFS_HID=y \
-    CONFIG_ZRAM_WRITEBACK=y \
-    CONFIG_KEYBOARD_GPIO_SWAP=m \
-    CONFIG_RICHTAP_FOR_PMIC_ENABLE=y; do
-    grep -Fxq "$expected" "$worktree/out/.config" || fail "missing expected configuration: $expected"
-done
-
-if (( dev_thinlto )); then
-    for expected in CONFIG_LTO_CLANG_THIN=y CONFIG_CFI_CLANG=y; do
-        grep -Fxq "$expected" "$worktree/out/.config" || fail "missing expected development configuration: $expected"
-    done
-    ! grep -Fxq 'CONFIG_LTO_CLANG_FULL=y' "$worktree/out/.config" || \
-        fail 'development profile unexpectedly enabled Full LTO'
-fi
+profile=full
+(( ! dev_thinlto )) || profile=thinlto
+bash "$script_dir/resolve-eqs-config.sh" --check "$worktree/out/.config" "$profile"
 
 if (( display_modules )); then
     [[ -s "$worktree/out/Module.symvers" ]] || fail 'kernel Module.symvers is missing'
@@ -350,6 +336,7 @@ if (( touch_modules || functional_modules )); then
 fi
 
 if (( functional_modules )); then
+    python3 "$script_dir/check-module-inventory.py" "$worktree"
     for symvers in \
         "$module_root/motorola/drivers/power/bm_adsp_ulog/Module.symvers" \
         "$module_root/motorola/drivers/power/mmi_charger/Module.symvers"; do

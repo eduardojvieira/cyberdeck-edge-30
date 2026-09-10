@@ -1,0 +1,37 @@
+#!/bin/sh
+# Opt-in, one-boot H29 diagnostic. Never unload a driver or write a partition.
+set -eu
+export LC_ALL=C
+state=/var/lib/eqs-usb-adc
+modules=/run/eqs-modules
+name=qti_glink_charger.ko
+baseline=148f1c4c1e06f0d7fb5e20a6f36b1e6d2ee3ffc0a3c2277fa8ff69a26dfadc01
+candidate=5d8142809f6ec33b198a7f2eddbb4b97fd2608ac6d662ca05a22484c46850c85
+fail() { echo "EQS ADC REJECT: $*" >&2; exit 1; }
+check_hash() { printf '%s  %s\n' "$1" "$2" | sha256sum --check --status; }
+[ "$(id -u)" = 0 ] || fail 'root required'
+exec 9>/run/eqs-usb-adc.lock
+flock -n 9 || fail 'already preparing'
+[ -f "$state/armed" ] || { echo 'EQS ADC not armed; unchanged'; exit 0; }
+# Consume and persist the opt-in BEFORE changing RAM. A second boot is H29.
+mv "$state/armed" "$state/consumed"
+sync -f "$state"
+[ "$(cat "$state/consumed")" = "$candidate" ] || fail 'wrong arm marker'
+[ "$(uname -r)" = 5.10.209-android13-0-gbd42a1bb7281 ] || fail 'H29 required'
+[ ! -d /sys/module/qti_glink_charger ] || fail 'already loaded; no hot replacement'
+[ "$(findmnt -rn -T "$modules" -o FSTYPE)" = tmpfs ] || fail 'RAM modules required'
+[ "$modules" -ef /lib/modules ] || fail 'native module bind changed'
+[ ! -L "$modules/$name" ] || fail 'unexpected module symlink'
+check_hash "$baseline" "$modules/$name" || fail 'baseline mismatch'
+check_hash "$candidate" "$state/$name" || fail 'candidate mismatch'
+temporary=$(mktemp "$modules/.eqs-adc.XXXXXX")
+trap 'rm -f "$temporary"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+install -m 0644 "$state/$name" "$temporary"
+check_hash "$candidate" "$temporary" || fail 'copy mismatch'
+# Both objects have the same name, dependencies, aliases and exports; existing
+# depmod indices still resolve this path. Native loaders run after this unit.
+[ ! -d /sys/module/qti_glink_charger ] || fail 'loaded during preparation'
+mv -f "$temporary" "$modules/$name"
+echo "EQS ADC APPLIED boot=$(cat /proc/sys/kernel/random/boot_id) sha256=$candidate; next boot restores H29"

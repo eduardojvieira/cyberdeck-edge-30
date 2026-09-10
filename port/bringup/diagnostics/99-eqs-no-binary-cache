@@ -1,0 +1,3 @@
+// The small bring-up root must not regenerate ~88 MiB of optional APT caches.
+Dir::Cache::pkgcache "";
+Dir::Cache::srcpkgcache "";

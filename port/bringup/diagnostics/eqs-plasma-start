@@ -1,0 +1,13 @@
+#!/bin/sh
+# Wayfire autostart: publish GUI environment before upstream starts user units.
+set -eu
+: "${XDG_RUNTIME_DIR:?}" "${WAYLAND_DISPLAY:?}"
+test -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"
+test "${DBUS_SESSION_BUS_ADDRESS:-}" = "unix:path=$XDG_RUNTIME_DIR/bus"
+test "${KDE_NO_KWIN:-}" = 1
+export QT_QPA_PLATFORM=wayland XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE
+timeout 8 /usr/bin/dbus-update-activation-environment --systemd \
+    WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE \
+    QT_QPA_PLATFORM KDE_NO_KWIN KSCREEN_BACKEND KSCREEN_BACKEND_INPROCESS \
+    DBUS_SESSION_BUS_ADDRESS
+exec /usr/bin/startplasmamobile

@@ -1,0 +1,26 @@
+Subject: usb: phy: eusb2: Add 10us delay in eusb2 phy init
+Origin: https://github.com/droidian-devices/linux-android-lenovo-bronco/commit/d495a25ad3c4e4cabfc071bc5dbc337b44068899
+
+Qualcomm's change requires POR to remain asserted for at least 10us after
+the supplies have ramped up. Isolated candidate, not a proven eqs hub fix.
+
+diff --git a/drivers/usb/phy/phy-msm-snps-eusb2.c b/drivers/usb/phy/phy-msm-snps-eusb2.c
+--- a/drivers/usb/phy/phy-msm-snps-eusb2.c
++++ b/drivers/usb/phy/phy-msm-snps-eusb2.c
+@@ -1,6 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ /*
+- * Copyright (c) 2021-2023, Qualcomm Innovation Center, Inc. All rights reserved.
++ * Copyright (c) 2021-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+  */
+ 
+ #define pr_fmt(fmt)	"eusb2_phy: %s: " fmt, __func__
+@@ -723,6 +723,8 @@ static int msm_eusb2_phy_init(struct usb_phy *uphy)
+ 
+ 	msm_eusb2_write_readback(phy->base, USB_PHY_UTMI_CTRL5, POR, POR);
+ 
++	udelay(10);
++
+ 	msm_eusb2_write_readback(phy->base, USB_PHY_HS_PHY_CTRL_COMMON0,
+ 			PHY_ENABLE | RETENABLEN, PHY_ENABLE | RETENABLEN);
+ 

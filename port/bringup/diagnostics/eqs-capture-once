@@ -1,0 +1,146 @@
+#!/bin/sh
+set -eu
+mark() { printf '<3>EQS NATIVE_CAPTURE %s\n' "$*" >>/dev/kmsg || :; }
+mark START
+while read -r device target type options rest; do
+    case "$target" in /|/etc|/var|/run) mark "MOUNT $device $target $type $options";; esac
+done </proc/mounts
+# Disarm the returning trial before writes; leave the separate preview timer alone.
+if error=$(rm -f /etc/systemd/system/multi-user.target.wants/eqs-capture-once.service /etc/systemd/system/timers.target.wants/eqs-capture-once.timer 2>&1); then
+    mark "DISARM OK"
+else
+    mark "DISARM FAIL $error"
+    exit 1
+fi
+D=/var/log/eqs-bringup
+if error=$(mkdir -p "$D" 2>&1); then :; else mark "LOGDIR FAIL $error"; exit 1; fi
+chmod 700 "$D"
+printf "START\n" > "$D/progress.txt"
+rm -f "$D/terminal.txt" "$D/terminal-launch.txt" "$D/screen.png" "$D/screen.png.partial"
+timeout 5 systemctl log-level info || :
+timeout 10 journalctl --flush || :
+if [ -x /usr/local/sbin/eqs-adsp-start ]; then
+    timeout 15 /usr/local/sbin/eqs-adsp-start > "$D/adsp.txt" 2>&1 || :
+fi
+if [ -x /usr/local/sbin/eqs-usb-rndis ]; then
+    # ADSP reports running before its Type-C device has necessarily registered.
+    if timeout 9 udevadm wait --timeout=8 --initialized=false /sys/class/typec/port0 > "$D/usb.txt" 2>&1; then
+        timeout 10 /usr/local/sbin/eqs-usb-rndis >> "$D/usb.txt" 2>&1 || :
+    else
+        echo 'EQS USB TYPEC WAIT FAILED; no bind attempted' >> "$D/usb.txt"
+    fi
+fi
+if [ -x /usr/local/libexec/eqs-terminal-probe ]; then
+    timeout 5 runuser -u droidian -- rm -f /home/droidian/.local/state/eqs-bringup/terminal.txt
+    timeout 8 runuser -u droidian -- sh -c '
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+        systemd-run --user --unit=eqs-terminal-probe --collect \
+            --property=RuntimeMaxSec=60 /usr/bin/qmlkonsole -e /usr/local/libexec/eqs-terminal-probe
+    ' > "$D/terminal-launch.txt" 2>&1 || :
+fi
+ssh_capture=
+if [ -x /usr/local/sbin/eqs-usb-shell ]; then
+    timeout 40 /usr/local/sbin/eqs-usb-shell > "$D/ssh.txt" 2>&1 &
+    ssh_capture=$!
+fi
+# Stream selected graphics tags before the audio error flood overwrites logcat.
+timeout 40 lxc-attach -n android -- /system/bin/logcat -b all -v threadtime '*:S' 'libEGL:V' 'Adreno-EGL:V' 'Adreno-GSL:V' > "$D/egl.txt" 2>&1 &
+egl_capture=$!
+sleep 45
+wait "$egl_capture" || :
+if [ -n "$ssh_capture" ]; then wait "$ssh_capture" || :; fi
+if [ -x /usr/local/libexec/eqs-terminal-probe ] && [ -f /home/droidian/.local/state/eqs-bringup/terminal.txt ]; then
+    timeout 5 runuser -u droidian -- cat /home/droidian/.local/state/eqs-bringup/terminal.txt > "$D/terminal.txt" 2>&1 || :
+fi
+timeout 12 runuser -u droidian -- sh -c '
+    export XDG_RUNTIME_DIR=/run/user/$(id -u)
+    export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+    systemctl --user status plasma-xdg-desktop-portal-kde.service --no-pager
+    busctl --user --no-pager list
+' > "$D/user-session.txt" 2>&1 || :
+if [ -f /usr/local/libexec/eqs-wayfire-state.py ]; then
+    printf 'WF_QUERY_START\n' > "$D/wayfire.txt"
+    if timeout 8 runuser -u droidian -- /usr/bin/python3 -u /usr/local/libexec/eqs-wayfire-state.py >> "$D/wayfire.txt" 2>&1; then
+        echo WF_QUERY_OK >> "$D/wayfire.txt"
+    else
+        echo "WF_QUERY_EXIT=$?" >> "$D/wayfire.txt"
+    fi
+fi
+# Observe the existing session; never unlock, change power or capture as root.
+printf 'SCREEN_CAPTURE_START\n' > "$D/screen.txt"
+cat /proc/uptime >> "$D/screen.txt"
+if [ -x /usr/bin/grim ]; then
+    if timeout -k 2 12 runuser -u droidian -- sh -ec '
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+        exec systemd-run --user --quiet --pipe --wait --collect \
+            --unit=eqs-screen-probe --property=Type=exec \
+            --property=RuntimeMaxSec=8 --property=TimeoutStopSec=2 \
+            --property=LimitFSIZE=16M /usr/bin/grim -o HWCOMPOSER-1 -t png -
+    ' </dev/null > "$D/screen.png.partial" 2>> "$D/screen.txt"; then
+        # Envelope only: decode the retrieved PNG on the host before interpreting it.
+        if [ "$(od -An -tx1 -N8 "$D/screen.png.partial" | tr -d ' \n')" = 89504e470d0a1a0a ]; then
+            mv "$D/screen.png.partial" "$D/screen.png"
+            echo SCREEN_CAPTURE_OK >> "$D/screen.txt"
+        else
+            echo SCREEN_CAPTURE_INVALID >> "$D/screen.txt"
+        fi
+    else
+        echo "SCREEN_CAPTURE_FAILED exit=$?" >> "$D/screen.txt"
+    fi
+else
+    echo 'SCREEN_CAPTURE_UNAVAILABLE grim not installed' >> "$D/screen.txt"
+fi
+rm -f "$D/screen.png.partial"
+{
+    uname -a
+    cat /proc/cmdline /proc/mounts
+    df -h /
+    ps -eo pid,comm | grep -E 'wayfire|plasmashell|kwin_wayland|kwin_x11|qmlkonsole' || :
+    timeout 5 runuser -u droidian -- sh -ec 'file=$(mktemp /home/droidian/.eqs-write-probe.XXXXXX); rm "$file"; echo HOME_WRITE_OK' || :
+    sha256sum /run/eqs-modules/mdt_loader.ko || :
+    timeout 8 systemctl --failed --no-pager || :
+    timeout 8 systemctl status lxc@android plasma-mobile-wf mtp-configfs@rndis --no-pager || :
+    ls -l /sys/class/udc /dev/tty0 /dev/tty7 /dev/hvc0 || :
+    ls -l /dev/kgsl-3d0 /dev/ion /dev/dma_heap/* || :
+    timeout 5 runuser -u droidian -- sh -c 'id; for node in /dev/kgsl-3d0 /dev/ion /dev/dma_heap/*; do [ -e "$node" ] || continue; test -r "$node" && r=yes || r=no; test -w "$node" && w=yes || w=no; echo "$node read=$r write=$w"; done' || :
+    for file in /sys/class/remoteproc/remoteproc*/name /sys/class/remoteproc/remoteproc*/state /sys/class/remoteproc/remoteproc*/firmware /sys/class/usb_role/*/role /sys/class/udc/a600000.dwc3/state /sys/class/udc/a600000.dwc3/current_speed /sys/class/typec/*/data_role /sys/class/typec/*/power_role /sys/class/extcon/*/state /sys/class/power_supply/battery/capacity /sys/class/power_supply/battery/temp /sys/class/power_supply/battery/status /sys/class/backlight/*/brightness /sys/class/backlight/*/actual_brightness /sys/class/backlight/*/max_brightness /sys/class/backlight/*/bl_power; do
+        [ -f "$file" ] || continue
+        printf '\n%s\n' "$file"
+        timeout 2 cat "$file" || :
+    done
+} > "$D/state.txt" 2>&1
+{
+    timeout 5 lxc-info -n android || :
+    timeout 8 lxc-attach -n android -- /system/bin/getprop || :
+    timeout 8 lxc-attach -n android -- /system/bin/cat /proc/mounts || :
+    timeout 8 lxc-attach -n android -- /system/bin/sha256sum /vendor/lib/modules/mdt_loader.ko /vendor_dlkm/lib/modules/mdt_loader.ko || :
+    timeout 10 lxc-attach -n android -- /system/bin/logcat -b all -d -t 2000 || :
+} > "$D/android.txt" 2>&1
+# Installed only for the explicitly authorized camera trial. No image capture.
+if [ -f /usr/local/libexec/eqs-camera-probe.py ]; then
+    timeout 48 lxc-attach -n android -- /system/bin/logcat -b all -v threadtime '*:S' 'CameraService:V' 'CameraClient:V' 'CameraBase:V' 'Camera2Client:V' 'Camera3-Device:V' 'CamX:V' 'CHIUSECASE:V' 'CHX:V' > "$D/camera-logcat.txt" 2>&1 &
+    camera_log=$!
+    for camera_id in 0 1; do
+        timeout -k 2 20 runuser -u droidian -- /usr/bin/python3 -u /usr/local/libexec/eqs-camera-probe.py "$camera_id" > "$D/camera-open-$camera_id.txt" 2>&1 || :
+    done
+    wait "$camera_log" || :
+fi
+# Read-only media evidence; never play sound, open a camera or force a module.
+{
+    dpkg-query -W -f='${binary:Package} ${Version}\n' plasma-mobile-wf pulseaudio-modules-droid-modern
+    cat /proc/asound/cards /proc/modules
+    ls -l /dev/snd /dev/media* /dev/video* /sys/bus/i2c/drivers/wl2868c
+    timeout 8 runuser -u droidian -- sh -c '
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+        pactl info; pactl list short cards; pactl list short sinks; pactl list short sources
+    '
+    timeout 8 lxc-attach -n android -- /system/bin/dumpsys media.camera
+} > "$D/media.txt" 2>&1 || :
+timeout 15 journalctl -b --no-pager -n 15000 > "$D/journal.txt" || :
+printf "CAPTURED\n" >> "$D/progress.txt"
+timeout 10 journalctl --sync || :
+sync
+mark COMPLETE

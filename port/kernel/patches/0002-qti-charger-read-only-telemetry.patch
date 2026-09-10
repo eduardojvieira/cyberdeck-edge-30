@@ -1,0 +1,263 @@
+Subject: [DIAGNOSTIC] qti_glink_charger: validate replies and expose raw read-only ADC
+
+Base: eqs-development/android_kernel_motorola_sm8475-modules
+Commit: 9f8d247d457622c08ff547e5498e6fa453e876ed
+
+eqs RETAR replies leave the property field at zero; it cannot correlate reads.
+Serialize queries and latch ADC off after any failed read, including normal
+charger reads: a late battery reply also has 40 bytes. Normal policy continues.
+No power-role, voltage, reset or firmware-update commands are added.
+
+--- a/motorola/drivers/power/qti_glink_charger/qti_glink_charger.c
++++ b/motorola/drivers/power/qti_glink_charger/qti_glink_charger.c
+@@ -24,6 +24,7 @@
+ #include <linux/workqueue.h>
+ #include <linux/string.h>
+ #include <linux/mutex.h>
++#include <linux/spinlock.h>
+ #include <linux/delay.h>
+ #include <linux/soc/qcom/pmic_glink.h>
+ #include <linux/power/bm_adsp_ulog.h>
+@@ -225,6 +226,9 @@
+ 	struct mutex			write_lock;
+ 	struct oem_read_buf_resp_msg	rx_buf;
+ 	atomic_t			rx_valid;
++	spinlock_t			rx_lock;
++	u32				rx_property;
++	bool				adc_read_failed;
+ 	struct work_struct		setup_work;
+ 	struct work_struct		notify_work;
+ 	struct oem_notify_ind_msg	notify_msg;
+@@ -332,18 +336,33 @@
+ 
+ static int handle_oem_read_ack(struct qti_charger *chg, void *data, size_t len)
+ {
+-	if (len != sizeof(chg->rx_buf)) {
+-		mmi_err(chg, "Incorrect received length %zu expected %lu\n", len,
+-			sizeof(chg->rx_buf));
+-		atomic_set(&chg->rx_valid, 0);
++	struct oem_read_buf_resp_msg *msg = data;
++	unsigned long flags;
++
++	if (len != sizeof(*msg)) {
++		mmi_err(chg, "Invalid read response length %zu, expected %zu\n",
++			len, sizeof(*msg));
+ 		return -EINVAL;
+ 	}
+-
+-	memcpy(&chg->rx_buf, data, sizeof(chg->rx_buf));
++	if (msg->hdr.owner != MSG_OWNER_OEM ||
++	    msg->hdr.type != MSG_TYPE_REQ_RESP ||
++	    msg->hdr.opcode != OEM_READ_BUF_REQ)
++		return -EINVAL;
++
++	/* eqs RETAR firmware leaves the reply property at zero for all reads. */
++	mmi_dbg(chg, "read reply property: %u, size: %u\n",
++		msg->oem_property_id, msg->data_size);
++	spin_lock_irqsave(&chg->rx_lock, flags);
++	if (chg->rx_property == OEM_PROP_MAX ||
++	    (msg->oem_property_id && msg->oem_property_id != chg->rx_property)) {
++		spin_unlock_irqrestore(&chg->rx_lock, flags);
++		return -EAGAIN;
++	}
++	memcpy(&chg->rx_buf, msg, sizeof(*msg));
++	chg->rx_property = OEM_PROP_MAX;
+ 	atomic_set(&chg->rx_valid, 1);
+ 	complete(&chg->read_ack);
+-	mmi_dbg(chg, "read ack for property: %u\n", chg->rx_buf.oem_property_id);
+-
++	spin_unlock_irqrestore(&chg->rx_lock, flags);
+ 	return 0;
+ }
+ 
+@@ -393,6 +412,9 @@
+ {
+ 	struct pmic_glink_hdr *hdr = data;
+ 	struct qti_charger *chg = priv;
++
++	if (len < sizeof(*hdr))
++		return -EINVAL;
+ 
+ 	mmi_dbg(chg, "owner: %u type: %u opcode: 0x%x len:%zu\n", hdr->owner,
+ 		hdr->type, hdr->opcode, len);
+@@ -486,17 +508,30 @@
+ 			       void *val, size_t val_len)
+ {
+ 	struct oem_read_buf_req_msg oem_buf = { { 0 } };
++	bool adc = property == OEM_PROP_MASTER_SWITCHEDCAP_INFO ||
++		   property == OEM_PROP_SLAVE_SWITCHEDCAP_INFO;
++	unsigned long flags;
+ 	int rc;
+ 
+-	if (val_len > (OEM_PROPERTY_DATA_SIZE * sizeof(u32))) {
+-		mmi_err(chg, "Incorrect data length %zu for property: %u\n",
+-						val_len, property);
++	if (!val || !val_len || val_len > sizeof(chg->rx_buf.buf) ||
++	    property >= OEM_PROP_MAX)
+ 		return -EINVAL;
+-	}
+-
+-	if (atomic_read(&chg->state) == PMIC_GLINK_STATE_DOWN) {
+-		mmi_err(chg, "ADSP glink state is down\n");
+-		return -ENOTCONN;
++
++	/* A diagnostic read must not queue behind ongoing charger requests. */
++	if (adc) {
++		if (!mutex_trylock(&chg->read_lock))
++			return -EBUSY;
++	} else {
++		mutex_lock(&chg->read_lock);
++	}
++	/* No sequence ID/property echo: any ambiguous prior read taints ADC. */
++	if (adc && chg->adc_read_failed) {
++		rc = -EPIPE;
++		goto out;
++	}
++	if (atomic_read(&chg->state) != PMIC_GLINK_STATE_UP) {
++		rc = -ENOTCONN;
++		goto out;
+ 	}
+ 
+ 	oem_buf.hdr.owner = MSG_OWNER_OEM;
+@@ -505,50 +540,83 @@
+ 	oem_buf.oem_property_id = property;
+ 	oem_buf.data_size = val_len;
+ 
+-	mutex_lock(&chg->read_lock);
++	spin_lock_irqsave(&chg->rx_lock, flags);
+ 	reinit_completion(&chg->read_ack);
++	atomic_set(&chg->rx_valid, 0);
++	chg->rx_property = property;
++	spin_unlock_irqrestore(&chg->rx_lock, flags);
+ 
+ 	mmi_dbg(chg, "Start data read for property: %u, len=%zu\n",
+ 		property, val_len);
+-
+-	rc = pmic_glink_write(chg->client, &oem_buf,
+-					sizeof(oem_buf));
+-	if (rc < 0) {
+-		mmi_err(chg, "Error in sending message rc=%d on property: %u\n",
+-						rc, property);
++	rc = pmic_glink_write(chg->client, &oem_buf, sizeof(oem_buf));
++	if (rc < 0)
+ 		goto out;
+-	}
+-
+-	rc = wait_for_completion_timeout(&chg->read_ack,
+-				msecs_to_jiffies(OEM_WAIT_TIME_MS));
+-	if (!rc) {
+-		mmi_err(chg, "timed out on property: %u\n", property);
++	if (!wait_for_completion_timeout(&chg->read_ack,
++					msecs_to_jiffies(OEM_WAIT_TIME_MS))) {
+ 		rc = -ETIMEDOUT;
+ 		goto out;
+-	} else {
++	}
++
++	spin_lock_irqsave(&chg->rx_lock, flags);
++	if (atomic_read(&chg->state) != PMIC_GLINK_STATE_UP)
++		rc = -ENOTCONN;
++	else if (!atomic_read(&chg->rx_valid) ||
++		 (chg->rx_buf.oem_property_id && chg->rx_buf.oem_property_id != property) ||
++		 chg->rx_buf.data_size != val_len)
++		rc = -ENODATA;
++	else {
++		memcpy(val, chg->rx_buf.buf, val_len);
+ 		rc = 0;
+ 	}
+-
+-	if (!atomic_read(&chg->rx_valid)) {
+-		rc = -ENODATA;
+-		goto out;
+-	}
+-
+-	if (chg->rx_buf.data_size != val_len) {
+-		mmi_err(chg, "Invalid data size %u, on property: %u\n",
+-				chg->rx_buf.data_size, property);
+-		rc = -ENODATA;
+-		goto out;
+-	}
+-
+-	memcpy(val, chg->rx_buf.buf, val_len);
++	spin_unlock_irqrestore(&chg->rx_lock, flags);
++out:
++	spin_lock_irqsave(&chg->rx_lock, flags);
++	chg->rx_property = OEM_PROP_MAX;
+ 	atomic_set(&chg->rx_valid, 0);
+-out:
++	spin_unlock_irqrestore(&chg->rx_lock, flags);
++	/* A late normal battery reply has the same 40-byte shape as ADC. */
++	if (rc < 0)
++		chg->adc_read_failed = true;
++	if (rc < 0)
++		mmi_err(chg, "Read property %u failed: %d\n", property, rc);
+ 	mmi_dbg(chg, "Complete data read for property: %u\n", property);
+ 	mutex_unlock(&chg->read_lock);
+-
+ 	return rc;
+ }
++
++/* Raw firmware fields, not a calibrated measurement at the USB connector. */
++static ssize_t switchedcap_snapshot_show(struct device *dev,
++					struct device_attribute *attr, char *buf)
++{
++	struct qti_charger *chg = dev_get_drvdata(dev);
++	struct switched_dev_info info = { 0 };
++	int rc, pos = 0;
++	u32 i;
++
++	BUILD_BUG_ON(sizeof(info) != 40);
++	if (!chg->switched_nums || chg->switched_nums > 2)
++		return -EOPNOTSUPP;
++	for (i = 0; i < chg->switched_nums; i++) {
++		rc = qti_charger_read(chg, OEM_PROP_MASTER_SWITCHEDCAP_INFO + i,
++				      &info, sizeof(info));
++		if (rc)
++			return rc;
++		/* Do not evaluate an invalid wire representation of C bool. */
++		if (((u8 *)&info)[0] > 1)
++			return -ENODATA;
++		pos += scnprintf(buf + pos, PAGE_SIZE - pos,
++			"raw=1 index=%u chg_en=%u role=%u mode=%u int_stat=%u "
++			"ibat_ma=%d ibus_ma=%d vbus_mv=%d vout_mv=%d vac_mv=%d "
++			"vbat_mv=%d vusb_mv=%d vwpc_mv=%d die_temp=%d\n",
++			i, info.chg_en, info.chg_role, info.work_mode, info.int_stat,
++			info.ibat_ma, info.ibus_ma, info.vbus_mv, info.vout_mv,
++			info.vac_mv, info.vbat_mv, info.vusb_mv, info.vwpc_mv,
++			info.die_temp);
++	}
++	return pos;
++}
++static struct device_attribute dev_attr_switchedcap_snapshot =
++	__ATTR(switchedcap_snapshot, 0400, switchedcap_snapshot_show, NULL);
+ 
+ int qti_charger_set_property(u32 property, const void *val, size_t val_len)
+ {
+@@ -2810,6 +2878,10 @@
+ 
+ 	wireless_psy_init(chg);
+ 
++	rc = device_create_file(chg->dev, &dev_attr_switchedcap_snapshot);
++	if (rc)
++		mmi_err(chg, "Could not create switchedcap_snapshot: %d\n", rc);
++
+ 	create_debugfs_entries(chg);
+ 	return 0;
+ }
+@@ -2853,6 +2925,7 @@
+ 		return;
+ 	}
+ 
++	device_remove_file(chg->dev, &dev_attr_switchedcap_snapshot);
+ 	device_remove_file(chg->dev, &dev_attr_cid_status);
+ 	device_remove_file(chg->dev, &dev_attr_tcmd);
+ 	device_remove_file(chg->dev, &dev_attr_force_pmic_icl);
+@@ -3062,6 +3135,8 @@
+ 	init_completion(&chg->read_ack);
+ 	init_completion(&chg->write_ack);
+ 	atomic_set(&chg->rx_valid, 0);
++	spin_lock_init(&chg->rx_lock);
++	chg->rx_property = OEM_PROP_MAX;
+ 	atomic_set(&chg->state, PMIC_GLINK_STATE_UP);
+ 	platform_set_drvdata(pdev, chg);
+ 	chg->dev = dev;

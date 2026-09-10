@@ -1,0 +1,18 @@
+[Unit]
+Description=One-shot eqs native boot capture and return to bootloader
+DefaultDependencies=no
+Wants=systemd-journald.service
+After=systemd-journald.service
+SuccessAction=reboot
+FailureAction=reboot
+RebootArgument=bootloader
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/eqs-capture-once
+TimeoutStartSec=180
+StandardOutput=kmsg
+StandardError=kmsg
+
+[Install]
+WantedBy=multi-user.target

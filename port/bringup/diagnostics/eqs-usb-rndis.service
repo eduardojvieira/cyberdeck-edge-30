@@ -1,0 +1,15 @@
+[Unit]
+Description=Opt-in eqs native USB diagnostic transport (no login server)
+Requires=sys-kernel-config.mount
+After=sys-kernel-config.mount systemd-udev-trigger.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/eqs-usb-rndis --start
+ExecStop=/usr/local/sbin/eqs-usb-rndis --stop
+TimeoutStartSec=15
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

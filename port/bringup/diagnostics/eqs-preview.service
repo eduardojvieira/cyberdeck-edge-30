@@ -1,0 +1,13 @@
+[Unit]
+Description=eqs development startup and capture without automatic reboot
+Wants=systemd-journald.service
+After=systemd-journald.service
+SuccessAction=none
+FailureAction=none
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/eqs-capture-once
+TimeoutStartSec=180
+StandardOutput=journal
+StandardError=journal

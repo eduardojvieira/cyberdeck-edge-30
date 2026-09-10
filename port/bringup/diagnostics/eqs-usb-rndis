@@ -1,0 +1,126 @@
+#!/bin/sh
+# Opt-in development transport; no DHCP, login server or forwarding.
+set -eu
+umask 077
+fail() { echo "EQS USB REFUSED: $*" >&2; exit 1; }
+[ "$#" -le 1 ] || fail 'usage: eqs-usb-rndis [--start|--stop]'
+action=${1:---start}
+case "$action" in --start|--stop) ;; *) fail 'usage: eqs-usb-rndis [--start|--stop]';; esac
+U=/sys/class/udc/a600000.dwc3
+G=/sys/kernel/config/usb_gadget/eqs-debug
+R=/sys/class/usb_role/a600000.ssusb-role-switch/role
+[ "$(id -u)" = 0 ] || fail 'root required'
+[ -d "$U" ] && [ -d /sys/kernel/config/usb_gadget ] || fail 'native UDC/configfs absent'
+# /run is root-owned; serialize this helper, not arbitrary vendor USB writers.
+[ ! -L /run/eqs-usb-rndis.lock ] || fail 'unexpected lock symlink'
+exec 9>/run/eqs-usb-rndis.lock
+flock -n 9 || fail 'another helper invocation is active'
+owner=$(cat "$U/function")
+case "$owner" in ''|eqs-debug) ;; *) fail "UDC already owned by $owner";; esac
+owned_binding() {
+    [ -r "$G/UDC" ] && [ "$(cat "$G/UDC")" = a600000.dwc3 ] &&
+        [ "$(cat "$U/function")" = eqs-debug ]
+}
+udc_free() {
+    current_owner=$(cat "$U/function") && [ -z "$current_owner" ]
+}
+device_role() {
+    case "$(cat /sys/class/typec/port0/data_role)" in
+        'host [device]'|device) return 0;; *) return 1;;
+    esac
+}
+known_definition() {
+    [ ! -L "$G" ] || return 1
+    [ "$(cat "$G/idVendor")" = 0x18d1 ] || return 1
+    [ "$(cat "$G/idProduct")" = 0xd001 ] || return 1
+    [ "$(cat "$G/strings/0x409/serialnumber")" = eqs-dev ] || return 1
+    [ "$(cat "$G/strings/0x409/manufacturer")" = Droidian ] || return 1
+    [ "$(cat "$G/strings/0x409/product")" = 'eqs USB diagnostic' ] || return 1
+    [ "$(cat "$G/configs/c.1/strings/0x409/configuration")" = RNDIS ] || return 1
+    set -- "$G/functions/"*
+    [ "$#" = 1 ] && [ "$1" = "$G/functions/rndis.usb0" ] || return 1
+    set -- "$G/configs/"*
+    [ "$#" = 1 ] && [ "$1" = "$G/configs/c.1" ] || return 1
+    [ "$(find "$G/configs/c.1" -mindepth 1 -maxdepth 1 -type l)" = "$G/configs/c.1/rndis.usb0" ] || return 1
+    [ "$(readlink -f "$G/configs/c.1/rndis.usb0")" = "$G/functions/rndis.usb0" ]
+}
+interface_name() {
+    interface=$(cat "$G/functions/rndis.usb0/ifname")
+    case "$interface" in usb*) ;; *) fail 'unexpected assigned interface';; esac
+    number=${interface#usb}
+    case "$number" in ''|*[!0-9]*) fail 'unexpected assigned interface';; esac
+}
+binding=
+if [ -e "$G" ] || [ -L "$G" ]; then
+    known_definition || fail 'existing gadget differs or is incomplete; preserve it for inspection'
+    binding=$(cat "$G/UDC")
+    case "$binding" in ''|a600000.dwc3) ;; *) fail 'gadget bound to another UDC';; esac
+elif [ "$owner" = eqs-debug ]; then
+    fail 'UDC ownership and gadget definition disagree'
+fi
+if [ "$action" = --stop ]; then
+    if [ -n "$binding" ]; then
+        owned_binding || fail 'ownership changed before stop'
+        printf '\n' > "$G/UDC"
+        binding=$(cat "$G/UDC") || fail 'cannot verify unbind'
+        [ -z "$binding" ] || fail 'unbind did not complete'
+    elif [ -n "$owner" ]; then
+        fail 'UDC ownership and binding disagree'
+    fi
+    echo 'EQS USB STOPPED; definition retained, Type-C role unchanged'
+    exit 0
+fi
+previous_role=$(cat "$R")
+case "$previous_role" in none|device) ;; *) fail "USB role $previous_role";; esac
+device_role || fail 'Type-C is not advertising device role'
+if [ -n "$binding" ]; then
+    owned_binding && [ "$previous_role" = device ] || fail 'existing binding/role disagree'
+    interface_name
+    echo 'EQS USB ALREADY BOUND; no reconfiguration'
+    ip -br address show dev "$interface"
+    exit 0
+fi
+[ -z "$owner" ] || fail 'UDC ownership and binding disagree'
+bound=no
+changed_role=no
+cleanup() {
+    rc=$?
+    if [ "$rc" != 0 ]; then
+        if [ "$bound" = yes ] && owned_binding; then printf '\n' >"$G/UDC" || :; fi
+        if [ "$changed_role" = yes ] && udc_free &&
+            [ "$(cat "$R")" = device ] && device_role; then
+            printf '%s\n' "$previous_role" >"$R" || :
+        fi
+    fi
+    exit "$rc"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+if [ ! -d "$G" ]; then
+    mkdir "$G"
+    mkdir -p "$G/strings/0x409" "$G/configs/c.1/strings/0x409" "$G/functions/rndis.usb0"
+    printf '0x18d1\n' >"$G/idVendor"
+    printf '0xd001\n' >"$G/idProduct"
+    printf 'eqs-dev\n' >"$G/strings/0x409/serialnumber"
+    printf 'Droidian\n' >"$G/strings/0x409/manufacturer"
+    printf 'eqs USB diagnostic\n' >"$G/strings/0x409/product"
+    printf 'RNDIS\n' >"$G/configs/c.1/strings/0x409/configuration"
+    ln -s "$G/functions/rndis.usb0" "$G/configs/c.1/rndis.usb0"
+fi
+# Direct-host diagnostic only. The parent role switch starts at none on eqs.
+udc_free && [ "$(cat "$R")" = "$previous_role" ] && device_role || fail 'owner/role changed before bind'
+if [ "$previous_role" = none ]; then
+    changed_role=yes
+    printf 'device\n' >"$R"
+fi
+[ "$(cat "$R")" = device ]
+# Set before the write so a signal cannot leave a successful bind untracked.
+bound=yes
+printf 'a600000.dwc3\n' >"$G/UDC"
+owned_binding && [ "$(cat "$R")" = device ] && device_role || fail 'owner/role changed during bind'
+interface_name
+ip address replace 192.168.2.15/24 dev "$interface"
+ip link set "$interface" up
+echo 'EQS USB BOUND; enumeration/carrier/IP peer still require validation'
+ip -br address show dev "$interface"

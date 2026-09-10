@@ -1,2 +1,4 @@
 reference/repos/
 .work/
+__pycache__/
+out/

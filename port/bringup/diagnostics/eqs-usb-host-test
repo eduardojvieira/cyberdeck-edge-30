@@ -1,0 +1,80 @@
+#!/bin/sh
+# Opt-in H29 USB2 port observation. No PM policy, role, PD or VBUS writes.
+set -eu
+export LC_ALL=C
+[ "$(id -u)" = 0 ] || { echo 'Run as root' >&2; exit 1; }
+[ "$(uname -r)" = 5.10.209-android13-0-gbd42a1bb7281 ] || { echo 'H29 kernel required' >&2; exit 1; }
+exec 9>/run/eqs-usb-host-test.lock
+flock -n 9 || { echo 'USB test already running' >&2; exit 1; }
+C=/sys/bus/platform/devices/a600000.ssusb/a600000.dwc3
+R=/sys/class/usb_role/a600000.ssusb-role-switch/role
+mark() { printf 'EQS USB_PORT_CAPTURE %s\n' "$*"; }
+trap 'exit 130' INT
+trap 'exit 143' TERM
+is_host() {
+    [ "$(cat "$R" 2>/dev/null)" = host ] &&
+        grep -Fq '[host]' /sys/class/typec/port0/data_role
+}
+snapshot() {
+    mark OBSERVE
+    for file in power/control power/runtime_status ../power/runtime_status "$R" \
+        /sys/class/typec/port0/*_role \
+        "$C/power/runtime_status" "$C/../power/runtime_status"; do
+        [ -f "$file" ] || continue
+        printf '%s: ' "$file"
+        timeout 2 cat "$file" || :
+    done
+    timeout 5 lsusb -t || :
+    timeout 2 grep -Ei 'xhci|dwc3|eusb' /proc/interrupts || :
+    # This invokes USB class GET_STATUS, not debugfs MMIO or SET_FEATURE.
+    # usbfs may resume the root while open, without changing its PM policy.
+    if report=$(timeout -k 2 10 lsusb -v -d 1d6b:0002 -s "$bus:$device" 2>&1); then
+        printf '%s\n' "$report"
+        # lsusb can return zero even if its individual GET_STATUS fails.
+        if ! printf '%s\n' "$report" | grep -Eq '^[[:space:]]+Port [0-9]+: [[:xdigit:]]{4}\.[[:xdigit:]]{4}'; then
+            mark PORT_STATUS_INCOMPLETE
+            return 1
+        fi
+        mark PORT_STATUS_RECORDED
+    else
+        mark "PORT_STATUS_FAILED exit=$?"
+        printf '%s\n' "$report"
+        return 1
+    fi
+}
+mark 'WAIT_HOST up to 15 minutes; observe only'
+uname -a
+cat /proc/sys/kernel/random/boot_id
+sha256sum /run/eqs-modules/phy-msm-snps-eusb2.ko || :
+n=0
+while ! is_host; do
+    n=$((n + 1))
+    [ "$n" -lt 180 ] || { mark 'NO_HOST; unchanged'; exit 0; }
+    sleep 5
+done
+sleep 3
+hub=
+for path in "$C"/xhci-hcd.*/usb*; do
+    [ "$(cat "$path/idVendor" 2>/dev/null)" = 1d6b ] || continue
+    [ "$(cat "$path/idProduct" 2>/dev/null)" = 0002 ] || continue
+    [ -z "$hub" ] || { mark 'AMBIGUOUS_USB2_ROOT; unchanged'; exit 1; }
+    hub=$path
+done
+[ -n "$hub" ] || { mark 'NO_USB2_ROOT; unchanged'; exit 1; }
+cd "$hub"
+bus=$(cat busnum)
+device=$(cat devnum)
+case "$bus" in ''|*[!0-9]*) mark INVALID_BUS; exit 1;; esac
+[ "$bus" -gt 0 ] && [ "$device" = 1 ] || { mark INVALID_ROOT_ADDRESS; exit 1; }
+mark "USB2_ROOT $hub address=$bus:$device"
+n=0
+while [ "$n" -le 12 ]; do
+    # Do not query a controller recreated under the same sysfs name.
+    [ "$hub" -ef . ] && [ -e idVendor ] && is_host || {
+        mark HOST_OR_ROOT_GONE; exit 0;
+    }
+    snapshot
+    n=$((n + 1))
+    [ "$n" -gt 12 ] || sleep 10
+done
+mark COMPLETE

@@ -1,0 +1,34 @@
+#!/bin/sh
+# One-shot diagnostic, not a charger policy or replacement for the audio stack.
+set -eu
+fail() { echo "ADSP REFUSED: $*" >&2; exit 1; }
+[ "$(id -u)" = 0 ] || fail 'root required'
+[ ! -e /sys/kernel/boot_adsp/boot ] || fail 'vendor audio loader already owns startup'
+rproc=
+for path in /sys/class/remoteproc/remoteproc*; do
+    [ -r "$path/name" ] || continue
+    [ "$(cat "$path/name")" = 3000000.remoteproc-adsp ] || continue
+    [ -z "$rproc" ] || fail 'ambiguous ADSP'
+    rproc=$path
+done
+[ -n "$rproc" ] || fail 'ADSP not registered'
+[ "$(tr -d '\000' < "$rproc/device/of_node/compatible")" = qcom,cape-adsp-pas ] || fail 'unexpected ADSP hardware'
+[ "$(cat "$rproc/firmware")" = adsp.mdt ] || fail 'unexpected selected firmware'
+loader=/proc/device-tree/soc/qcom,msm-adsp-loader
+[ -d "$loader" ] || fail 'missing loader device tree'
+for property in adsp-fuse-not-supported adsp-fw-name adsp-fw-names nvmem-cells qcom,proc-img-to-load; do
+    [ ! -e "$loader/$property" ] || fail 'alternate firmware selection requires vendor loader'
+done
+firmware=/android/vendor/firmware_mnt/image/adsp.mdt
+printf '%s  %s\n' adfe8a1ee6a176b77ba0579bd77d0f941acfaa69eaef8f2dd777a7ce2ed59499 "$firmware" | sha256sum -c - || fail 'stock firmware identity'
+state=$(cat "$rproc/state")
+case "$state" in
+    running) echo 'ADSP already running; no write'; exit 0;;
+    offline) :;;
+    *) fail "unexpected state $state";;
+esac
+echo "ADSP START $rproc"
+# Same rproc_boot() path as adsp-loader; never stop/recover or override firmware.
+printf 'start\n' > "$rproc/state"
+[ "$(cat "$rproc/state")" = running ] || fail 'start did not reach running'
+echo 'ADSP RUNNING'
