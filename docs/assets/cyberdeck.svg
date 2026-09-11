@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="title desc">
   <title id="title">Cyberdeck Edge 30 Ultra</title>
-  <desc id="desc">Ilustración de un teléfono horizontal convertido en terminal Linux. Droidian, Plasma Mobile 6 y ARM64; port experimental eqs.</desc>
+  <desc id="desc">Concept illustration of a landscape phone running a Linux terminal. Droidian, Plasma Mobile 6 and ARM64; experimental eqs port.</desc>
   <defs>
     <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
       <path d="M32 0H0V32" fill="none" stroke="#18333d" stroke-width="1"/>
@@ -17,7 +17,7 @@
     <text x="76" y="83" fill="#6de6bd" font-size="16" font-weight="700" letter-spacing="3">MOTOROLA / EQS</text>
     <text x="72" y="163" fill="#eff8fa" font-size="68" font-weight="800" letter-spacing="-2">CYBERDECK</text>
     <text x="76" y="209" fill="#b4cbd3" font-size="29" letter-spacing="4">EDGE 30 ULTRA</text>
-    <text x="76" y="257" fill="#94abb6" font-size="19">Linux nativo. En tu bolsillo.</text>
+    <text x="76" y="257" fill="#94abb6" font-size="19">Native Linux. In your pocket.</text>
     <rect x="76" y="294" width="126" height="34" rx="7" fill="#163c38"/>
     <text x="139" y="317" text-anchor="middle" fill="#8defcb" font-size="14" font-weight="700">DROIDIAN</text>
     <rect x="214" y="294" width="138" height="34" rx="7" fill="#183446"/>

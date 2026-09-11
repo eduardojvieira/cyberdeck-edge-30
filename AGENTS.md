@@ -11,6 +11,9 @@ Este proyecto porta Droidian con Plasma Mobile 6 al Motorola Edge 30 Ultra (`eqs
 - Preferir fuentes oficiales y upstream; registrar commit, versión y origen de firmware cuando se usen.
 - No crear repositorios, capas, scripts o abstracciones antes de necesitarlos.
 - Mantener `README.md` y su checklist alineados con el estado real.
+- `README.md` es la portada de referencia en inglés; `README.es.md` y
+  `README.pt-BR.md` son traducciones. Mantener selector, comandos, versiones,
+  advertencias y estado de validación sincronizados; no traducir rutas ni flags.
 - Eduardo autorizó publicar el repositorio el 11 de septiembre de 2026.
   La publicación cubre código y documentación, no `.work/`, firmware ni datos privados.
 
