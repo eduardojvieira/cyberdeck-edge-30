@@ -1,0 +1,32 @@
+#!/usr/bin/python3
+"""Add Waydroid's binder devices without remounting Halium's live binderfs."""
+import os
+from pathlib import Path
+import sys
+
+sys.path.insert(0, "/usr/lib/waydroid")
+from tools.helpers.drivers import allocBinderNodes
+
+dev = Path("/dev")
+binderfs = dev / "binderfs"
+names = ("anbox-binder", "anbox-hwbinder", "anbox-vndbinder")
+native = {os.stat(dev / name).st_rdev for name in ("binder", "hwbinder", "vndbinder")}
+if not binderfs.is_mount() or not (binderfs / "binder-control").is_char_device():
+    raise RuntimeError("Expected the existing Halium binderfs; refusing to mount it")
+
+# Reject conflicting names before allocating anything. Never replace /dev nodes.
+for name in names:
+    link, node = dev / name, binderfs / name
+    if os.path.lexists(link) and not (link.is_symlink() and link.resolve() == node):
+        raise RuntimeError(f"Refusing conflicting binder path: {link}")
+    if os.path.lexists(node) and (not node.is_char_device() or node.stat().st_rdev in native):
+        raise RuntimeError(f"Refusing non-independent binder node: {node}")
+
+allocBinderNodes(None, names)
+for name in names:
+    node, link = binderfs / name, dev / name
+    if not node.is_char_device() or node.stat().st_rdev in native:
+        raise RuntimeError(f"Invalid Waydroid binder device: {node}")
+    node.chmod(0o666)
+    if not os.path.lexists(link):
+        link.symlink_to(node)

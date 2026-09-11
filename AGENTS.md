@@ -33,5 +33,5 @@ Este proyecto porta Droidian con Plasma Mobile 6 al Motorola Edge 30 Ultra (`eqs
   `replacement`, nunca aplicarla universalmente a todos los Goodix/eqs.
 - Nunca exportar la raíz viva, `/home`, credenciales o backups a una imagen.
   Código a Git; binarios, firmware y evidencia privada bajo `.work/`.
-- `test-wallpaper-sync.py` es nativo del Edge; no ejecutar todos los tests
-  indiscriminadamente sobre la PC.
+- `test-wallpaper-sync.py` y `port/waydroid/check-prepare.py` son nativos del Edge;
+  no ejecutar todos los tests indiscriminadamente sobre la PC.

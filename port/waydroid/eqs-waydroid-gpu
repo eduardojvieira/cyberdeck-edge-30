@@ -1,0 +1,28 @@
+#!/usr/bin/python3
+"""Expose KGSL to Android UIDs without relaxing the host's root:render device."""
+import os
+from pathlib import Path
+import stat
+
+host = Path("/dev/kgsl-3d0").stat()
+if not stat.S_ISCHR(host.st_mode):
+    raise RuntimeError("KGSL is not a character device")
+directory = Path("/dev/eqs-waydroid")
+directory.mkdir(mode=0o700, exist_ok=True)
+info = directory.lstat()
+if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700:
+    raise RuntimeError("Expected a root-only directory for the private KGSL node")
+node = directory / "kgsl-3d0"
+if not os.path.lexists(node):
+    os.mknod(node, stat.S_IFCHR | 0o600, host.st_rdev)
+info = node.lstat()
+if not stat.S_ISCHR(info.st_mode) or info.st_rdev != host.st_rdev or info.st_uid != 0:
+    raise RuntimeError("Conflicting private KGSL node")
+node.chmod(0o666)
+
+# LXC applies this after config_nodes: only the container sees the permissive node.
+config = Path("/var/lib/waydroid/lxc/waydroid/config")
+entry = f"lxc.mount.entry = {node} dev/kgsl-3d0 none bind,create=file 0 0"
+if entry not in config.read_text().splitlines():
+    with config.open("a") as handle:
+        handle.write("\n" + entry + "\n")

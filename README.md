@@ -64,6 +64,7 @@ La geometría corresponde a la unidad de 256 GB; no sirve para un layout menor.
 | Editores/agentes | VS Code, Antigravity/CLI, Zed, Herdr, Codex y Pi con configuración portable; sin copiar almacenes de credenciales, logins remotos pendientes. |
 | Ciencia | Octave 11.3, wxMaxima 26.08/Maxima 5.50, Python científico, SageMath, Spyder, JupyterLab y Scilab **2026.1** ARM64. Scilab APT 2024 fue retirado y 2026 revalidado. [Ciencia](port/shell/SCIENCE.md). |
 | Oficina | ONLYOFFICE 9.4 ARM64 con repositorio oficial limitado a esa app. [Oficina](port/shell/OFFICE.md). |
+| Android (11 de septiembre) | Waydroid + Android 13 GAPPS/Google Play instalados sin flash; dos arranques y red comprobados, login del usuario pendiente. Integración experimental, no incluida en el ZIP limpio. [Uso, ajustes y límites](port/waydroid/README.md). |
 
 Estas herramientas están en el teléfono; la imagen base no clona Homebrew,
 entornos grandes, cuentas ni configuraciones privadas. Launchers, versiones,
