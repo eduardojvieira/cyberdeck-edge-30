@@ -98,6 +98,22 @@ Respaldos privados: `/var/lib/eqs-locale-20260911/` y
 El paquete anterior y el log de instalación de `+eqs5` están en
 `/var/lib/eqs-locale-clock-20260911/`.
 
+### Benchmark CPU (11 de septiembre)
+
+**Geekbench 7.0.0 Preview para Linux/AArch64**, ejecutado nativamente en
+Droidian H29, completó la prueba y subió el
+[resultado público 322037](https://browser.geekbench.com/v7/cpu/322037)
+con autorización de Eduardo. Salida `0`; ejecución completa, incluida la subida:
+**6 min 47 s**. Equipo cargando, gobernador `walt`, sin modificar frecuencias
+ni protecciones térmicas. Es una pasada, no una media ni una prueba GPU.
+
+La enumeración OpenCL de libhybris hacía fallar incluso `--help`; se evitó
+sólo para este proceso con `OCL_ICD_VENDORS` apuntando a una carpeta vacía.
+No se cambió el ICD del sistema. Logs privados en
+`~/.cache/eqs-geekbench7-20260911/` del Edge; **no publicar el enlace de claim**.
+El visor público devolvió HTTP 403 a las herramientas de lectura, por lo que
+no se transcribieron puntuaciones sin verificar. No comparar con Geekbench 6.
+
 ## Actualizaciones sin reflashear
 
 Teléfono y receta consolidada usan `Acquire::Droidian::Version "current";`.
