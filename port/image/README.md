@@ -4,6 +4,11 @@
 Reutiliza el arranque H29 probado; no recompila otro kernel durante la
 consolidación. La imagen nueva requiere una validación física propia.
 
+**Receta actualizada el 11 de septiembre:** fija Plasma `+eqs5`, con fechas
+sensibles al idioma y textos españoles del bloqueo. El paquete se comprueba
+con Qt 6.8.2; **el ZIP del 10 de septiembre conserva `+eqs4` y no fue modificado**.
+Hace falta una nueva construcción/validación para obtener un ZIP con este cambio.
+
 ## Construir
 
 1. Preparar los **22 inputs** de `inputs.json`: rutas locales y SHA-256.
@@ -21,14 +26,14 @@ esa imagen regular; rechaza un VG Droidian existente/mapeado, filtra LVM al loop
 propio y desmonta/desactiva al terminar o fallar. No contiene ADB/fastboot ni
 actúa sobre el teléfono. No sobrescribe salidas anteriores.
 
-## Contrato comprobado en la imagen
+## Contrato de la receta
 
 | Componente | Integración |
 |---|---|
 | Arranque | Boot/vendor_boot/DTBO/vbmeta H29 exactos en ZIP y `/boot`; rescate A aparte. |
 | Halium | Módulos nativos en LXC después de vendor_dlkm; mount super-modem readonly corregido. |
 | GPU/medios | Seis blobs stock GPU, KGSL, audio/cámara/EVA y política cape. Sin Bronco. |
-| Plasma | ARM64 eqs4, bus PAM único, portal, PAM/IPC, botones, gestos y rotación bloqueable. |
+| Plasma | ARM64 eqs5, fechas localizadas, bus PAM único, portal, PAM/IPC, botones, gestos y rotación bloqueable. |
 | Ventanas | 200 %, horizontal bloqueado, maximización genérica y timeout 1000 ms. |
 | Teclado/fondo | OSK manual Maliit y fondo de bloqueo siguiendo el escritorio. |
 | Cámara | Qt5 privado ABI exacto, launcher exclusivo y fallback si cambia Qt. |
@@ -38,7 +43,7 @@ actúa sobre el teléfono. No sobrescribe salidas anteriores.
 | Mantenimiento | `current`, holds Plasma/kernel y `FLASH_BOOTIMAGE=no`. No Sid/next. |
 | Privacidad | Base limpia, machine-id vacío, sin claves/red/IA del usuario. |
 
-La base histórica debe fallar `verify-rootfs.py` por Plasma sin eqs4 (RED);
+La base histórica debe fallar `verify-rootfs.py` por Plasma sin eqs5 (RED);
 la imagen montada debe pasar después (GREEN). Se comprueba contenido, no sólo
 parches en Git. Dpkg no inicia servicios. No se incluyen timers de captura,
 reboots automáticos ni experimentos USB ADC/POR/swap. Loader stock administra ADSP.
@@ -49,7 +54,7 @@ reboots automáticos ni experimentos USB ADC/POR/swap. Loader stock administra A
 - Arranque/rescate: `.work/eqs-h29/boot-bundle/`; fuentes eqs e initramfs en
   `port/kernel/`. Reproduce el **binario validado**, no declara equivalente un
   kernel recompilado con el perfil de desarrollo actual.
-- Plasma: `port/plasma-mobile-wf/build-package.sh`, Qt 6.8.2, eqs4.
+- Plasma: `port/plasma-mobile-wf/build-package.sh`, Qt 6.8.2, eqs5.
 - Qt5: fuente/parches/tests en `port/qt5-wayland/README.md`.
 - VHCI/BNEP: fuente/toolchain/CRC H29 descritos en `docs/BLUETOOTH.md`.
 - GPU/RC: stock RETAR -16 local; hashes/transformación en

@@ -1,0 +1,109 @@
+--- a/components/mobileshell/qml/statusbar/ClockText.qml
++++ b/components/mobileshell/qml/statusbar/ClockText.qml
+@@ -36,7 +36,7 @@
+         id: date
+         visible: ShellSettings.Settings.dateInStatusBar && !root.showSecondRow
+ 
+-        text: Qt.formatDate(source.data.Local.DateTime, "ddd. MMMM d")
++        text: source.data.Local.DateTime.toLocaleDateString(Qt.locale(), "ddd d MMMM")
+         color: Kirigami.Theme.textColor
+         verticalAlignment: Qt.AlignVCenter
+         font.pixelSize: fontPixelSize
+--- a/components/mobileshell/qml/statusbar/StatusBar.qml
++++ b/components/mobileshell/qml/statusbar/StatusBar.qml
+@@ -185,7 +185,7 @@
+                 Layout.fillWidth: true
+ 
+                 PlasmaComponents.Label {
+-                    text: Qt.formatDate(timeSource.data.Local.DateTime, "ddd. MMMM d")
++                    text: timeSource.data.Local.DateTime.toLocaleDateString(Qt.locale(), "ddd d MMMM")
+                     color: Kirigami.Theme.disabledTextColor
+                     font.pixelSize: root.smallerTextPixelSize
+                 }
+--- a/components/mobileshell/qml/actiondrawer/LandscapeContentContainer.qml
++++ b/components/mobileshell/qml/actiondrawer/LandscapeContentContainer.qml
+@@ -98,7 +98,7 @@
+ 
+         PlasmaComponents.Label {
+             id: date
+-            text: Qt.formatDate(timeSource.data.Local.DateTime, "ddd MMMM d")
++            text: timeSource.data.Local.DateTime.toLocaleDateString(Qt.locale(), "ddd d MMMM")
+             verticalAlignment: Qt.AlignTop
+             color: Kirigami.Theme.disabledTextColor
+             opacity: Math.min(brightnessPressedValue, columnLayout.opacity)
+--- a/components/sessionlockplugin/qml/Main.qml
++++ b/components/sessionlockplugin/qml/Main.qml
+@@ -175,7 +175,8 @@
+             Layout.fillWidth: false
+             Layout.preferredWidth: parent.width - batteryIcon.width
+             text: SolidBattery.primary.chargeState === 1
+-                     ? "Charging: "+chargeAmp+"mA" : "Discharging: "+chargeAmp+"mA"
++                     ? i18nd("plasma_org.kde.plasma.private.mobileshell", "Charging: %1 mA", chargeAmp)
++                     : i18nd("plasma_org.kde.plasma.private.mobileshell", "Discharging: %1 mA", chargeAmp)
+             font.bold: true
+             font.pixelSize: 14
+             fontSizeMode: Text.Fit
+@@ -296,7 +297,7 @@
+             height: parent.height * 0.6
+             anchors.top: parent.top
+             anchors.horizontalCenter: parent.horizontalCenter
+-            text: Qt.formatDateTime(topPanel.currentDT, "dddd, MMMM d")
++            text: topPanel.currentDT.toLocaleDateString(Qt.locale(), Locale.LongFormat)
+             fontSizeMode: Text.Fit
+             font.pointSize: 28
+             font.bold: true
+--- a/components/sessionlockplugin/qml/UnlockComponent.qml
++++ b/components/sessionlockplugin/qml/UnlockComponent.qml
+@@ -90,7 +90,7 @@
+ 			    
+ 			    passwordMaskDelay: 400
+ 
+-			    placeholderText: "Enter Passsword"
++			    placeholderText: i18nd("plasma_org.kde.plasma.private.mobileshell", "Password")
+ 
+ 			    font.family: Kirigami.Theme.defaultFont.family
+ 		        font.pointSize: 16
+--- a/shell/contents/lockscreen/Clock.qml
++++ b/shell/contents/lockscreen/Clock.qml
+@@ -62,7 +62,7 @@
+             }
+         }
+         PC3.Label {
+-            text: Qt.formatDate(timeSource.data["Local"]["DateTime"], "dddd, MMMM d")
++            text: timeSource.data["Local"]["DateTime"].toLocaleDateString(Qt.locale(), Locale.LongFormat)
+             color: "white"
+             opacity: 0.9
+ 
+--- a/containments/homescreens/halcyon/package/contents/ui/Clock.qml
++++ b/containments/homescreens/halcyon/package/contents/ui/Clock.qml
+@@ -40,7 +40,7 @@
+         Layout.fillWidth: true
+ 
+         horizontalAlignment: Text.AlignLeft
+-        text: Qt.formatDate(timeSource.data["Local"]["DateTime"], "ddd, MMM d")
++        text: timeSource.data["Local"]["DateTime"].toLocaleDateString(Qt.locale(), "ddd d MMM")
+         color: "white"
+         style: softwareRendering ? Text.Outline : Text.Normal
+         styleColor: softwareRendering ? ColorScope.backgroundColor : "transparent" // no outline, doesn't matter
+--- a/po/es/plasma_org.kde.plasma.private.mobileshell.po
++++ b/po/es/plasma_org.kde.plasma.private.mobileshell.po
+@@ -428,3 +428,19 @@
+ 
+ #~ msgid "Decrease Volume"
+ #~ msgstr "Disminuir el volumen"
++
++# eqs: Wayfire session lock labels.
++#: components/sessionlockplugin/qml/UnlockComponent.qml
++#, kde-format
++msgid "Password"
++msgstr "Contraseña"
++
++#: components/sessionlockplugin/qml/Main.qml
++#, kde-format
++msgid "Charging: %1 mA"
++msgstr "Cargando: %1 mA"
++
++#: components/sessionlockplugin/qml/Main.qml
++#, kde-format
++msgid "Discharging: %1 mA"
++msgstr "Descargando: %1 mA"

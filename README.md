@@ -5,9 +5,9 @@ XT2241-2 RETAR de Eduardo, con Android 14 base `U1SQS34.52-21-1-16` y bootloader
 abierto. **Droidian y Plasma funcionan en el teléfono.** No cambiar de interfaz
 ni flashear binarios de ThinkPhone/Bronco: sólo son referencias de código.
 
-## Estado al 10 de septiembre de 2026
+## Estado al 11 de septiembre de 2026
 
-El teléfono usa **H29**, Plasma Mobile **6.3.3 +eqs4**, Wayfire/HWC, libhybris,
+El teléfono tiene **H29**, Plasma Mobile **6.3.3 +eqs5**, Wayfire/HWC, libhybris,
 Maliit y XWayland. Plasma 6.5 no es requisito. El ZIP inicial de septiembre 1
 **no representa lo que funciona hoy**.
 
@@ -36,6 +36,8 @@ del teléfono.
 
 Archivo generado: `.work/eqs-image-20260910-r4/build/eqs-preview-20260910.zip`
 (1,76 GiB). SHA-256, verificaciones y límites en la release enlazada arriba.
+Ese ZIP conserva `+eqs4`: la receta ya fija `+eqs5` con el arreglo de idioma,
+pero todavía no se generó otra imagen con ese cambio.
 
 ```sh
 # Docker, binfmt ARM64 e inputs locales de port/image/inputs.json preparados.
@@ -69,6 +71,32 @@ La geometría corresponde a la unidad de 256 GB; no sirve para un layout menor.
 Estas herramientas están en el teléfono; la imagen base no clona Homebrew,
 entornos grandes, cuentas ni configuraciones privadas. Launchers, versiones,
 pruebas y mantenimiento quedan documentados para reinstalación selectiva.
+
+### Idioma del teléfono (11 de septiembre)
+
+Sistema y formatos de Plasma configurados en **`es_AR.UTF-8`**, con
+`LANGUAGE=es_AR:es`. Instalados `chromium-l10n`, `firefox-l10n-es-ar`,
+`qt6-translations-l10n`, `qttranslations5-l10n`, `hunspell-es` y el paquete
+español oficial de VS Code. Chromium prioriza `es-AR,es` para las páginas.
+No se cambió la distribución del teclado ni se hizo un upgrade de la distribución.
+
+Waydroid reinició con configuración efectiva `es-rAR`; sus launchers también
+quedaron traducidos. Login SSH nuevo y entorno de activación KDE verificados.
+Tras reiniciar, Plasma ya tenía `es_AR`, pero sus relojes seguían formateando
+las fechas en inglés y el bloqueo contenía textos sin traducir. Instalado
+[`+eqs5`](port/plasma-mobile-wf/README.md#date-and-lockscreen-language-september-11):
+15 casos nativos pasan leyendo los recursos compilados y el catálogo español
+contiene «Contraseña», «Cargando» y «Descargando».
+**Activo tras recargar sólo Plasma con el teléfono desbloqueado**: comprobados
+visualmente «viernes, 11 de septiembre de 2026» y «Descargando» en el bloqueo.
+Wayfire y el arranque no cambiaron. La barra pasa la prueba nativa; su captura
+posterior al desbloqueo queda pendiente. Scilab tiene ahora
+[catálogo español parcial](port/shell/SCIENCE.md#traducción-española-11-de-septiembre).
+Estos ajustes están en el **teléfono**, no en el ZIP del 10 de septiembre.
+Respaldos privados: `/var/lib/eqs-locale-20260911/` y
+`~/.cache/eqs-locale-20260911/` del Edge.
+El paquete anterior y el log de instalación de `+eqs5` están en
+`/var/lib/eqs-locale-clock-20260911/`.
 
 ## Actualizaciones sin reflashear
 

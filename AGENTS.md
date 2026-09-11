@@ -21,12 +21,15 @@ Este proyecto porta Droidian con Plasma Mobile 6 al Motorola Edge 30 Ultra (`eqs
 - Nunca flashear a través de un hub USB-C.
 - No guardar secretos, claves, tokens ni datos personales en el repositorio o imágenes de desarrollo.
 
-## Imagen y estado consolidado (10 de septiembre de 2026)
+## Imagen y estado consolidado (11 de septiembre de 2026)
 
 - Estado actual y pendientes: `README.md` y `docs/RELEASE-20260910.md`; las
   notas H2–H29 describen evidencia fechada, no el siguiente ensayo obligatorio.
 - Imagen actual: `port/build-eqs-rootfs.sh --consolidated NUEVA_RUTA stock|replacement`.
   No usar el builder/flasher histórico para reproducir el teléfono actual.
+- La receta fija Plasma `+eqs5`; el ZIP del 10 de septiembre conserva `+eqs4`.
+  No confundir la receta actual con una imagen nueva construida/validada.
+  Waydroid, paquetes de idioma y herramientas personales están sólo en el teléfono.
 - Preservar H29 como input binario fijado; no declarar equivalente un kernel
   recompilado con otro perfil aunque conserve el mismo `uname -r`.
 - La calibración 2× pertenece al repuesto táctil de Eduardo; exige perfil

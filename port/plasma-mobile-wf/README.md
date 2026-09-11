@@ -1,5 +1,10 @@
 # Plasma/Wayfire navigation and session safety patches
 
+**September 11: `+eqs5` installed and active**, with localized dates and Spanish
+lockscreen labels; native packaged-resource tests pass. Only the plasmashell
+user unit was restarted after Eduardo unlocked and a desktop capture confirmed
+the state. Never restart the system Wayfire session to activate this change.
+
 **September 9: `+eqs4` installed and active on the existing phone, without
 flashing.** Native checks preserve both landscape transforms across lock/unlock
 toggles and full Wayfire config reloads. H29's previous `+eqs3` sets the real
@@ -13,6 +18,62 @@ unlock policy. The package remains held: Droidian's origin priority 1002 had
 previously downgraded the patched package through PackageKit.
 
 ## Source and changes
+
+### Date and lockscreen language (September 11)
+
+[`fix-locale.patch`](fix-locale.patch), packaged as **`+eqs5`**, replaces the
+locale-insensitive `Qt.formatDate[Time](date, pattern)` calls in all six shell
+clocks with `Date.toLocaleDateString(Qt.locale(), format)`. Compact clocks show
+day/month names in the selected locale; lock clocks use its native long date.
+Password and charging labels now use the existing mobileshell translation
+domain, with Spanish entries. No locale is hardcoded in the QML and no PAM,
+keyboard layout, rotation or navigation behavior changes.
+
+This was not an old session: the rebooted phone's plasmashell already had
+`LANG`/`LC_TIME=es_AR.UTF-8`. Qt 6.8.2 still rendered `Fri. September 11`.
+The modules prefer embedded QRCs, so editing the loose installed QML would not
+reliably fix the running code. Rebuild the package with the existing builder.
+
+[`test-locale.cpp`](test-locale.cpp) evaluates the actual date expressions in
+es_AR/en_US/de_DE. Source mode covers six clocks (18 cases); installed mode
+reads the two compiled plugin resources plus the legacy shell clock (15 cases).
+Halcyon is source-only: upstream disables its CMake subdirectory. The test does
+not construct the lock singleton, authenticate, or interact with the compositor.
+
+```sh
+g++ -fPIC port/plasma-mobile-wf/test-locale.cpp \
+  $(pkg-config --cflags --libs Qt6Gui Qt6Qml) -o /tmp/test-eqs-locale
+QT_FORCE_STDERR_LOGGING=1 /tmp/test-eqs-locale "$SOURCE" # upstream: expected RED
+# Repeat on a separate source copy with fix-locale.patch applied: GREEN.
+# Native ARM64/Qt 6.8.2, extracted package root or / on the Edge:
+QT_FORCE_STDERR_LOGGING=1 /tmp/test-eqs-locale --installed "$EXTRACTED_ROOT"
+```
+
+The builder checks both source expressions and embedded package resources, and
+the three translated strings in the compiled Spanish catalog. Evidence and
+artifacts: `.work/eqs-locale-clock-20260911/` (private, not a Fastboot image).
+
+Build exit 0; all seven manifest hashes pass. The main package SHA-256 is
+`f6150057b52d2df3818f7356b87d61dcbd30b2f88f5b67ffea4a3200c5dafbce`.
+Native installed Qt 6.8.2: 15 date checks and three catalog checks pass.
+Host: 27 PAM/IPC/navigation regressions, rotation, gesture config and seven
+builder rejection checks pass. Dpkg scripts/dependencies and the PAM/IPC/rotation
+C++ sources are unchanged from `+eqs4`; dpkg audit/verify are clean and the hold
+is preserved. Rollback package: `/var/lib/eqs-locale-clock-20260911/` on the Edge.
+The ZIP from September 10 was not rebuilt; only its next-build input was updated.
+
+Activation evidence: `activate.log`, `pre-reload.png` and `post-reload.png` in
+the same private directory. Plasma PID 5948 → 13778; Wayfire 4475 and the boot ID
+were preserved. The new process has `LANG`/`LC_TIME=es_AR.UTF-8`, loads the current
+plugins, and has no automatic restarts. The lockscreen visibly shows
+«viernes, 11 de septiembre de 2026» and «Descargando». It relocked normally on
+startup; a later unlocked status-bar capture is still pending (native clock
+tests pass). Existing QML warnings also occur in the previous PID's journal;
+this locale change does not fix those unrelated warnings.
+`actual_brightness=0` was also observed with the desktop visible: that node
+alone is not an awake/locked-state check. The root backup's `STATUS` records the
+earlier installation checkpoint; current activation is recorded in the user's
+`~/.cache/eqs-locale-clock-20260911/ACTIVE`.
 
 ### Desktop and lock wallpaper (September 8)
 
@@ -142,7 +203,7 @@ screen or unlocks a session. A native trial must separately verify the actual
 Wayfire transform after its full config reload, not just `lock_rotation=true`.
 September 9 host RED/GREEN evidence: `.work/eqs-rotation-lock/`.
 
-### Current phone: installation and rollback
+### September 9 installation and rollback (+eqs4)
 
 Main package SHA-256:
 `a208c4c752ed4eee2bc58c52a896ef388ee01b0f247f65214e393befd14fd2fe`.
@@ -218,7 +279,7 @@ configuration helper when preparing a new user session.
 ## ARM64 package build
 
 [`build-package.sh`](build-package.sh) builds the normal upstream Debian packages
-at revision `6.3.3-1~git20250414214107.69444e6.next.upgrade.6.3+eqs4`.
+at revision `6.3.3-1~git20250414214107.69444e6.next.upgrade.6.3+eqs5`.
 It refuses changed source/patch hashes, existing output (including symlinks),
 root execution, a non-container/non-ARM64 environment, a different snapshot or
 different private Qt dependencies. It does not download, install or flash.
@@ -256,7 +317,7 @@ The historical H29 `+eqs3` main package SHA-256 is
 `acc879833e6ff3dd2845f346d483ed17337b26883dd4a4b4061567c0c25243ab`.
 It is a Debian package candidate, **not a Fastboot ZIP**.
 
-Six host rejection checks, including changed navigation and rotation patches:
+Seven host rejection checks, including changed navigation, rotation and locale patches:
 
 ```sh
 export TMPDIR="$PWD/.work/test-tmp"

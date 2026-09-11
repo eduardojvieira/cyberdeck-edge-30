@@ -165,8 +165,9 @@ que esa geometría sea consistente en todos los arranques.
 El build conserva el rótulo upstream `scilab-branch-2026.1`: el tag fuente no
 estampa los metadatos de un binario oficial. Los tres primeros campos de
 `getversion("scilab")` son **2026, 1, 0**; el commit de arriba identifica la fuente real.
-Modelica, la compilación de ayuda offline y las traducciones están desactivados;
-aparece un aviso de localización y se usa inglés. No se validó toda la suite
+Modelica y la compilación de ayuda offline están desactivados. El paquete original
+omitía las traducciones; el catálogo español se agregó al teléfono el 11 de
+septiembre (ver abajo). No se validó toda la suite
 Xcos ni la compilación de extensiones ATOMS. Es renderizado por CPU, no GPU.
 
 **Actualizaciones:** APT no mantiene este prefijo y ya no hay Scilab 2024 instalado.
@@ -201,6 +202,31 @@ nativa de consola, gráfico, SciNotes y Xcos. Los inventarios y logs están en
 APT: su ejecutable ya no existe. Para recuperar 2026 se conserva el archivo
 verificado de arriba; preservar proyectos y configuraciones al restaurar su
 prefijo privado. No ejecutar un `autoremove` ciego.
+
+### Traducción española (11 de septiembre)
+
+El build conservaba libintl pero `--disable-build-localization` había omitido
+los catálogos. Se compilaron los `.po` españoles de **la misma fuente 2026.1**,
+siguiendo su `Makefile.am`, sin cambiar ejecutables ni bibliotecas:
+
+```sh
+# Desde scilab/ de la fuente fijada; OUT es un staging nuevo, no el runtime vivo.
+: "${OUT:?Definir una ruta nueva de staging}"
+mkdir -p "$OUT/locale/es_ES/LC_MESSAGES"
+msgcat --use-first -o "$OUT/scilab-es.po" modules/*/locales/es_ES*.po
+msgfmt --check --statistics -o "$OUT/locale/es_ES/LC_MESSAGES/scilab.mo" "$OUT/scilab-es.po"
+ln -s es_ES "$OUT/locale/es"
+ln -s es_ES "$OUT/locale/es_AR"
+```
+
+El árbol `locale/` se instaló en el `share/` del prefijo privado. SHA-256 del
+`.mo`: `653ecdeaddc7168db24b7b211e2a6272132f7b77a004ded2f13cf7fcc834443f`.
+Test **nativo** con `LANG=es_AR.UTF-8 LANGUAGE=es_AR:es`:
+`assert_checkequal(gettext("File"),"Archivo")` pasó, `getlanguage()` devolvió
+`es_AR` y desapareció el aviso de localización. La traducción upstream es
+**parcial: 2781 mensajes traducidos y 4250 sin traducir**. El tar original
+documentado arriba no incluye esta adición; staging en
+`.work/eqs-locale-20260911/scilab/`. No se tradujo ni reconstruyó la ayuda offline.
 
 ### Correcciones necesarias para compilar
 

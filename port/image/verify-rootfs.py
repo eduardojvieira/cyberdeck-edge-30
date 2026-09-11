@@ -11,7 +11,7 @@ root, assets = map(Path, sys.argv[1:3])
 inputs = json.loads((assets / 'INPUTS.json').read_text())
 version = subprocess.check_output(['dpkg-query', '--admindir=' + str(root / 'var/lib/dpkg'),
     '-W', '-f=${Version}', 'plasma-mobile-wf'], text=True)
-assert version == '6.3.3-1~git20250414214107.69444e6.next.upgrade.6.3+eqs4', version
+assert version == '6.3.3-1~git20250414214107.69444e6.next.upgrade.6.3+eqs5', version
 config = configparser.ConfigParser(interpolation=None)
 config.read(root / 'home/droidian/.config/plasma-mobile-wf/wayfire.ini')
 for group, key, value in [('core', 'transaction_timeout', '1000'), ('place', 'mode', 'maximize'),

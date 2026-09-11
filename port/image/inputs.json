@@ -4,8 +4,8 @@
     "sha256": "f4e9d5620f0541079d3c74e469c13540e370dbe0bbe89ef827b882481fbac5f8"
   },
   "plasma-mobile-wf.deb": {
-    "path": ".work/plasma-safety/docker-build/package-output/rotation-eqs4/package/plasma-mobile-wf_6.3.3-1~git20250414214107.69444e6.next.upgrade.6.3+eqs4_arm64.deb",
-    "sha256": "a208c4c752ed4eee2bc58c52a896ef388ee01b0f247f65214e393befd14fd2fe"
+    "path": ".work/eqs-locale-clock-20260911/package/plasma-mobile-wf_6.3.3-1~git20250414214107.69444e6.next.upgrade.6.3+eqs5_arm64.deb",
+    "sha256": "f6150057b52d2df3818f7356b87d61dcbd30b2f88f5b67ffea4a3200c5dafbce"
   },
   "camera-qt5.so": {
     "path": ".work/eqs-camera-orientation/candidate/lib/libQt5WaylandClient.so.5.15.15",
