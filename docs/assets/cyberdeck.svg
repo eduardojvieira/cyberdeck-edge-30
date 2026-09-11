@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="title desc">
+  <title id="title">Cyberdeck Edge 30 Ultra</title>
+  <desc id="desc">Ilustración de un teléfono horizontal convertido en terminal Linux. Droidian, Plasma Mobile 6 y ARM64; port experimental eqs.</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#18333d" stroke-width="1"/>
+    </pattern>
+    <linearGradient id="background" x2="1" y2="1">
+      <stop stop-color="#07121c"/>
+      <stop offset="1" stop-color="#10252b"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="400" rx="20" fill="url(#background)"/>
+  <path d="M670 0H1180Q1200 0 1200 20V380Q1200 400 1180 400H670Z" fill="url(#grid)" opacity=".65"/>
+  <path d="M52 52H96M52 52V76M1148 348H1104M1148 348V324" fill="none" stroke="#6de6bd" stroke-width="2"/>
+  <g font-family="DejaVu Sans, sans-serif">
+    <text x="76" y="83" fill="#6de6bd" font-size="16" font-weight="700" letter-spacing="3">MOTOROLA / EQS</text>
+    <text x="72" y="163" fill="#eff8fa" font-size="68" font-weight="800" letter-spacing="-2">CYBERDECK</text>
+    <text x="76" y="209" fill="#b4cbd3" font-size="29" letter-spacing="4">EDGE 30 ULTRA</text>
+    <text x="76" y="257" fill="#94abb6" font-size="19">Linux nativo. En tu bolsillo.</text>
+    <rect x="76" y="294" width="126" height="34" rx="7" fill="#163c38"/>
+    <text x="139" y="317" text-anchor="middle" fill="#8defcb" font-size="14" font-weight="700">DROIDIAN</text>
+    <rect x="214" y="294" width="138" height="34" rx="7" fill="#183446"/>
+    <text x="283" y="317" text-anchor="middle" fill="#9bdbfa" font-size="14" font-weight="700">PLASMA 6</text>
+    <rect x="364" y="294" width="90" height="34" rx="7" fill="#1c303a"/>
+    <text x="409" y="317" text-anchor="middle" fill="#c4d5dc" font-size="14" font-weight="700">ARM64</text>
+  </g>
+  <g transform="translate(712 99)">
+    <path d="M-28 126H-4M390 126H413V206H450" stroke="#6de6bd" stroke-width="2" fill="none" opacity=".55"/>
+    <circle cx="450" cy="206" r="4" fill="#6de6bd"/>
+    <rect x="-5" y="2" width="398" height="211" rx="28" fill="#050c12" stroke="#4b6675" stroke-width="2"/>
+    <rect x="8" y="15" width="372" height="185" rx="17" fill="#0e1c26" stroke="#203d49"/>
+    <circle cx="18" cy="108" r="3" fill="#425b68"/>
+    <path d="M34 46H355" stroke="#2c4652"/>
+    <circle cx="39" cy="34" r="3" fill="#6de6bd"/>
+    <circle cx="51" cy="34" r="3" fill="#74bddf"/>
+    <circle cx="63" cy="34" r="3" fill="#e4ba71"/>
+    <g font-family="DejaVu Sans Mono, monospace" font-size="16">
+      <text x="36" y="81" fill="#6de6bd">eqs:~ $</text>
+      <text x="119" y="81" fill="#e6f1f5">uname -s</text>
+      <text x="36" y="109" fill="#aac8d5">Linux</text>
+      <text x="36" y="148" fill="#6de6bd">eqs:~ $</text>
+      <rect x="120" y="133" width="10" height="18" rx="1" fill="#6de6bd"/>
+    </g>
+    <rect x="169" y="185" width="55" height="3" rx="1.5" fill="#597480"/>
+    <text x="194" y="-21" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-size="12" letter-spacing="2" fill="#9eb5be">EXPERIMENTAL PORT / H29</text>
+  </g>
+</svg>
