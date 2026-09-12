@@ -137,7 +137,7 @@ port/build-eqs-rootfs.sh --consolidated "$PWD/.work/eqs-image-new" stock
 | Editores/agentes | VS Code, Antigravity/CLI, Zed, Herdr, Codex e Pi com configuração portátil; sem copiar armazenamentos de credenciais, logins remotos pendentes. |
 | Ciência | Octave 11.3, wxMaxima 26.08/Maxima 5.50, Python científico, SageMath, Spyder, JupyterLab e Scilab **2026.1** ARM64. O Scilab 2024 do APT foi removido e o 2026 revalidado. [Ciência](port/shell/SCIENCE.md). |
 | Escritório | ONLYOFFICE 9.4 ARM64 com o repositório oficial limitado a esse aplicativo. [Escritório](port/shell/OFFICE.md). |
-| Android (11 de setembro) | Waydroid + Android 13 GAPPS/Google Play instalados sem flash; duas inicializações e rede verificadas, login do usuário pendente. Integração experimental, não incluída no ZIP limpo. [Uso, ajustes e limitações](port/waydroid/README.md). |
+| Android (11–12 de setembro) | Waydroid + Android 13 GAPPS/Google Play instalados sem flash; inicialização do Android, rede e abertura pelo KDE verificadas. Atalho da Play Store habilitado no Plasma; login do usuário pendente. Integração experimental, não incluída no ZIP limpo. [Uso, ajustes e limitações](port/waydroid/README.md). |
 
 Essas ferramentas estão no celular; a imagem base não clona Homebrew,
 ambientes grandes, contas nem configurações privadas. Launchers, versões,

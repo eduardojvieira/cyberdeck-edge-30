@@ -21,6 +21,53 @@ Se dejó `~/Waydroid-Google-Play.txt`, modo 600, con el GSF Android ID y las
 instrucciones. Ese archivo/identificador no se incluye en Git ni en imágenes.
 El registro **no garantiza Play Integrity, banca ni DRM**; nunca relockear H29.
 
+### Acceso de Play Store en Plasma (12 de septiembre)
+
+El [generador de Droidian Waydroid `c5380c1`](https://github.com/droidian/waydroid/blob/c5380c1/tools/services/user_manager.py)
+crea los accesos Android con `NoDisplay=true`. Play estaba instalado, pero su
+acceso quedaba oculto. Además, `app_settings` no es un identificador válido de
+acción para `desktop-file-validate`; se normalizó a `app-settings`.
+
+Después del primer arranque Android, ejecutar **como usuario, sin sudo, desde
+una terminal de Plasma**. Se reutiliza el acceso generado, sin duplicar iconos:
+
+```sh
+(
+    set -eu
+    app="$HOME/.local/share/applications/waydroid.com.android.vending.desktop"
+    test -f "$app"
+    backup=$(mktemp -d "$HOME/.cache/eqs-waydroid-launcher.XXXXXX")
+    cp -p "$app" "$backup/"
+    sed -i 's/app_settings/app-settings/g' "$app"
+    desktop-file-edit --set-key=NoDisplay --set-value=false "$app"
+    desktop-file-validate "$app"
+    kbuildsycoca6 --noincremental
+    printf 'Backup: %s\n' "$backup"
+)
+```
+
+El generador conserva el acceso de la app si ya existe: el cambio sobrevivió
+al cierre y nuevo arranque de la sesión Android. Si se elimina/recrea ese
+archivo, habrá que repetirlo. Para revertir, restaurar el `.desktop` del backup
+y volver a ejecutar `kbuildsycoca6 --noincremental`.
+
+**Verificado en el teléfono:** visibilidad con `Gio.DesktopAppInfo.should_show()`
+(antes `false`, después `true`), validación del `.desktop` y apertura mediante
+`kstart --application waydroid.com.android.vending`, incluso desde sesión Android
+detenida. `sys.boot_completed=1`, Play en primer plano, ventana Wayfire mapeada y
+captura Android de la pantalla de acceso en español. También se comprobó
+`kstart --application Waydroid`; el fallo general de arranque reportado no se
+reprodujo y no se modificó el motor Android. Por SSH se necesita el entorno real de Plasma,
+incluido `XDG_MENU_PREFIX=plasma-`, para probar la resolución de accesos de KDE.
+
+No se reinstaló ni reinicializó Android; tampoco se reiniciaron el teléfono o
+Wayfire. Login Google y confirmación de interacción táctil: usuario.
+
+**Pendiente:** Wayfire registró dos vistas mapeadas del mismo proceso de Play,
+también al abrirla desde una sesión Android detenida (`waydroid.open_windows=2`).
+Android mostró una sola actividad visible y una captura correcta. La comprobación
+de una única vista no pasó; falta determinar la causa y el impacto en la interfaz.
+
 ## Conjunto instalado
 
 | Componente | Versión/origen |
