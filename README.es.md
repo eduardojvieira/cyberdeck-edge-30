@@ -42,9 +42,19 @@ datos y alimentación; no se trabaja en monitores externos ni Motorola Ready For
 
 ## Estado
 
-**Última comprobación documentada: 11 de septiembre de 2026.**
+**Base documentada: 11 de septiembre de 2026.**
 Kernel **H29**, Plasma Mobile **6.3.3 +eqs5**, Wayfire/HWC, libhybris, Maliit y
 XWayland. Firmware base Android 14: `U1SQS34.52-21-1-16`. El bootloader permanece abierto.
+
+**15 de septiembre — escritorio Plasma 6.7.5 en ejecución:** Mobile/Workspace
+adaptados, Qt 6.10.2 GLES y Frameworks 6.28 pasaron las comprobaciones nativas
+de paquetes, conservando H29 y Wayfire/HWC. Tras corregir QScreen, un arranque
+posterior y una captura desbloqueada confirman el escritorio horizontal, escala
+200% y fecha en español. La ocultación de paneles está activada: Eduardo confirmó
+que las barras se ocultan, reaparecen al deslizar desde los bordes y responden
+Inicio/Recientes. Falta completar la matriz de uso; la receta de imagen sigue en
+**6.3.3 +eqs5**.
+[Evidencia y pendientes](port/plasma-mobile-wf/UPGRADE-6.7.md).
 
 | Área | Evidencia y límites |
 | :--- | :--- |

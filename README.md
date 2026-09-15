@@ -42,9 +42,18 @@ data and power; external displays and Motorola Ready For are out of scope.
 
 ## Status
 
-**Last documented verification: September 11, 2026.**
+**Documented baseline: September 11, 2026.**
 Kernel **H29**, Plasma Mobile **6.3.3 +eqs5**, Wayfire/HWC, libhybris, Maliit and
 XWayland. Android 14 firmware base: `U1SQS34.52-21-1-16`. The bootloader stays unlocked.
+
+**September 15 — Plasma 6.7.5 desktop running:** adapted Mobile/Workspace,
+Qt 6.10.2 GLES and Frameworks 6.28 passed native package checks, retaining H29
+and Wayfire/HWC. After the QScreen fix, a subsequent boot and an unlocked
+screen capture confirm the landscape desktop, 200% scale and Spanish date.
+Auto Hide Panels is enabled: Eduardo confirmed that the bars hide, reveal on
+edge swipes, and Home/Recents work. The full usability matrix remains pending;
+the image recipe remains **6.3.3 +eqs5**.
+[Upgrade evidence and remaining work](port/plasma-mobile-wf/UPGRADE-6.7.md).
 
 | Area | Evidence and limitations |
 | :--- | :--- |

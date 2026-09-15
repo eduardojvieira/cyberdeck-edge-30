@@ -1,22 +1,30 @@
 #!/usr/bin/env python3
-"""Host Qt virtual-screen check of the exact class. SOURCE is the pinned upstream tree."""
+"""Host Qt virtual-screen check. --prepared tests an already patched source as-is."""
 from pathlib import Path
+import argparse
+import hashlib
 import os
 import shlex
 import shutil
 import subprocess
-import sys
 import tempfile
 
 base = Path(__file__).resolve().parent
-source = Path(sys.argv[1]) / 'quicksettings/screenrotation'
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('source', type=Path)
+parser.add_argument('--prepared', action='store_true')
+args = parser.parse_args()
+source = args.source / 'quicksettings/screenrotation'
 with tempfile.TemporaryDirectory(prefix='eqs-rotation-') as temp:
     work = Path(temp)
     target = work / 'quicksettings/screenrotation'
     target.mkdir(parents=True)
     for name in ('screenrotationutil.cpp', 'screenrotationutil.h'):
         shutil.copyfile(source / name, target / name)
-    subprocess.run(['patch', '-p1', '--batch', '--fuzz=0', '-i', str(base / 'fix-rotation.patch')], cwd=work, check=True)
+        if args.prepared:
+            print(f'SOURCE SHA256 {hashlib.sha256((target / name).read_bytes()).hexdigest()} quicksettings/screenrotation/{name}', flush=True)
+    if not args.prepared:
+        subprocess.run(['patch', '-p1', '--batch', '--fuzz=0', '-i', str(base / 'fix-rotation.patch')], cwd=work, check=True)
     flags = shlex.split(subprocess.check_output(['pkg-config', '--cflags', '--libs', 'Qt6Core', 'Qt6Gui'], text=True))
     includes = Path(subprocess.check_output(['pkg-config', '--variable=includedir', 'Qt6Gui'], text=True).strip())
     version = subprocess.check_output(['pkg-config', '--modversion', 'Qt6Gui'], text=True).strip()

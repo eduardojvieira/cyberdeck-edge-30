@@ -1,0 +1,179 @@
+--- a/src/qscreenbackend.cpp
++++ b/src/qscreenbackend.cpp
+@@ -10,6 +10,7 @@
+ #include "qscreenconfig.h"
+ 
+ #include <config.h>
++#include <QCoreApplication>
+ 
+ using namespace KScreen;
+ 
+@@ -22,9 +23,9 @@
+     , m_isValid(true)
+ {
+     if (s_internalConfig == nullptr) {
+-        s_internalConfig = new QScreenConfig();
+-        connect(s_internalConfig, &QScreenConfig::configChanged, this, &QScreenBackend::configChanged);
++        s_internalConfig = new QScreenConfig(QCoreApplication::instance());
+     }
++    connect(s_internalConfig, &QScreenConfig::configChanged, this, &QScreenBackend::configChanged);
+ }
+ 
+ QScreenBackend::~QScreenBackend()
+@@ -46,16 +47,10 @@
+     return s_internalConfig->toKScreenConfig();
+ }
+ 
+-QString QScreenBackend::setConfig(const ConfigPtr &config)
++QFuture<SetConfigResult> QScreenBackend::setConfig(const ConfigPtr &config)
+ {
+-    if (!config) {
+-        return QString();
+-    }
+-
+-    qWarning() << "The QScreen backend for libkscreen is read-only,";
+-    qWarning() << "setting a configuration is not supported.";
+-    qWarning() << "You can force another backend using the KSCREEN_BACKEND env var.";
+-    return QString();
++    Q_UNUSED(config)
++    return QtFuture::makeReadyValueFuture(SetConfigResult(std::unexpected(QStringLiteral("QScreen backend is read-only"))));
+ }
+ 
+ bool QScreenBackend::isValid() const
+--- a/src/qscreenbackend.h
++++ b/src/qscreenbackend.h
+@@ -28,7 +28,7 @@
+     QString name() const override;
+     QString serviceName() const override;
+     KScreen::ConfigPtr config() const override;
+-    QString setConfig(const KScreen::ConfigPtr &config) override;
++    QFuture<SetConfigResult> setConfig(const KScreen::ConfigPtr &config) override;
+     bool isValid() const override;
+ 
+ private:
+--- a/src/qscreenconfig.cpp
++++ b/src/qscreenconfig.cpp
+@@ -41,6 +41,7 @@
+ ConfigPtr QScreenConfig::toKScreenConfig() const
+ {
+     ConfigPtr config(new Config);
++    config->setSupportedFeatures(Config::Feature::PrimaryDisplay | Config::Feature::PerOutputScaling);
+     config->setScreen(m_screen->toKScreenScreen());
+     updateKScreenConfig(config);
+     return config;
+@@ -63,6 +64,12 @@
+     QScreenOutput *qscreenoutput = new QScreenOutput(qscreen, this);
+     qscreenoutput->setId(outputId(qscreen));
+     m_outputMap.insert(qscreenoutput->id(), qscreenoutput);
++    const auto changed = [this] { Q_EMIT configChanged(toKScreenConfig()); };
++    // Bind connections to the output lifetime, including unplug/replug.
++    connect(qscreen, &QScreen::geometryChanged, qscreenoutput, changed);
++    connect(qscreen, &QScreen::orientationChanged, qscreenoutput, changed);
++    connect(qscreen, &QScreen::physicalDotsPerInchChanged, qscreenoutput, changed);
++    connect(qscreen, &QScreen::refreshRateChanged, qscreenoutput, changed);
+ 
+     if (!m_blockSignals) {
+         Q_EMIT configChanged(toKScreenConfig());
+@@ -79,6 +86,7 @@
+             removedOutputId = output->id();
+             m_outputMap.remove(removedOutputId);
+             delete output;
++            break; // removal invalidates the iterator
+         }
+     }
+     Q_EMIT configChanged(toKScreenConfig());
+@@ -108,9 +116,7 @@
+             kscreenOutput = output->toKScreenOutput();
+             config->addOutput(kscreenOutput);
+         }
+-        if (QGuiApplication::primaryScreen() == output->qscreen()) {
+-            config->setPrimaryOutput(kscreenOutput);
+-        }
++        kscreenOutput->setPriority(QGuiApplication::primaryScreen() == output->qscreen() ? 1 : output->id() + 2);
+     }
+ }
+ 
+--- a/src/qscreenoutput.cpp
++++ b/src/qscreenoutput.cpp
+@@ -55,45 +55,42 @@
+     output->setEnabled(true);
+     output->setConnected(true);
+ 
+-    // Rotation - translate QScreen::primaryOrientation() to Output::rotation()
+-    if (m_qscreen->primaryOrientation() == Qt::PortraitOrientation) {
+-        // 90 degrees
+-        output->setRotation(Output::Right);
+-    } else if (m_qscreen->primaryOrientation() == Qt::InvertedLandscapeOrientation) {
+-        // 180 degrees
+-        output->setRotation(Output::Inverted);
+-    } else if (m_qscreen->primaryOrientation() == Qt::InvertedPortraitOrientation) {
+-        // 270 degrees
+-        output->setRotation(Output::Left);
++    // ponytail: eqs has one native-portrait panel. QtWayland reports its
++    // nativeOrientation as PrimaryOrientation; use the already validated
++    // screenrotationutil mapping, not the current width/height heuristic.
++    auto rotation = Output::None;
++    if (m_qscreen->name() == QStringLiteral("HWCOMPOSER-1")) {
++        switch (m_qscreen->orientation()) {
++        case Qt::InvertedLandscapeOrientation: rotation = Output::Left; break;
++        case Qt::InvertedPortraitOrientation: rotation = Output::Inverted; break;
++        case Qt::LandscapeOrientation: rotation = Output::Right; break;
++        default: break;
++        }
+     }
++    output->setRotation(rotation);
++    const auto logical = m_qscreen->geometry();
++    const auto scale = m_qscreen->devicePixelRatio();
++    const auto pixels = logical.size() * scale;
++    output->setScale(scale);
++    output->setSizeMm(m_qscreen->physicalSize().toSize());
++    output->setPos(logical.topLeft());
++    output->setSize(pixels);
++    output->setExplicitLogicalSize(logical.size());
+ 
+-    // Physical size, geometry, etc.
+-    QSize mm;
+-    qreal physicalWidth;
+-    physicalWidth = m_qscreen->size().width() / (m_qscreen->physicalDotsPerInchX() / 25.4);
+-    mm.setWidth(qRound(physicalWidth));
+-    qreal physicalHeight;
+-    physicalHeight = m_qscreen->size().height() / (m_qscreen->physicalDotsPerInchY() / 25.4);
+-    mm.setHeight(qRound(physicalHeight));
+-    output->setSizeMm(mm);
+-    output->setPos(m_qscreen->availableGeometry().topLeft());
+-    output->setSize(m_qscreen->availableGeometry().size());
+-
+-    // Modes: we create a single default mode and go with that
++    // Read-only snapshot of the actual mode, not a list of settable modes.
+     ModePtr mode(new Mode);
+     const QString modeid = QStringLiteral("defaultmode");
+     mode->setId(modeid);
+     mode->setRefreshRate(m_qscreen->refreshRate());
+-    mode->setSize(m_qscreen->size());
+-
+-    const QString modename = QString::number(m_qscreen->size().width()) + QLatin1String("x") + QString::number(m_qscreen->size().height()) + QLatin1String("@")
+-        + QString::number(m_qscreen->refreshRate());
+-    mode->setName(modename);
++    const auto modeSize = output->isHorizontal() ? pixels : pixels.transposed();
++    mode->setSize(modeSize);
++    mode->setName(QStringLiteral("%1x%2@%3").arg(modeSize.width()).arg(modeSize.height()).arg(m_qscreen->refreshRate()));
+ 
+     ModeList modes;
+     modes[modeid] = mode;
+     output->setModes(modes);
+     output->setCurrentModeId(modeid);
++    output->setPreferredModes({modeid});
+ }
+ 
+ #include "moc_qscreenoutput.cpp"
+--- a/src/qscreenscreen.cpp
++++ b/src/qscreenscreen.cpp
+@@ -39,7 +39,7 @@
+     auto primary = QGuiApplication::primaryScreen();
+ 
+     if (primary) {
+-        QSize _s = primary->availableVirtualGeometry().size();
++        QSize _s = primary->virtualGeometry().size();
+ 
+         screen->setCurrentSize(_s);
+         screen->setId(1);

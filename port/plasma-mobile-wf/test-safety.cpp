@@ -7,6 +7,8 @@
 #include <QtEndian>
 #include <QString>
 #include <QByteArray>
+#include <QQmlComponent>
+#include <QQmlEngine>
 #include <security/pam_appl.h>
 #include <pwd.h>
 #include <cassert>
@@ -214,6 +216,43 @@ int main(int argc, char **argv) {
         return 0;
     }
     Connection connection;
+    if (mode == "nav-panel-state") {
+        assert(connection.client->property("activeAppFullscreen").isValid());
+        qmlRegisterSingletonInstance("org.kde.plasma.private.mobileshell.wayfireipcplugin", 254, 0,
+                                     "WayfireIPC", connection.client.get());
+        QQmlEngine engine;
+        QQmlComponent component(&engine, QUrl::fromLocalFile(qEnvironmentVariable("EQS_TEST_TRACKER")));
+        std::unique_ptr<QObject> tracker(component.create());
+        if (!tracker || component.isError()) qFatal("Tracker QML: %s", qPrintable(component.errorString()));
+        const auto check = [&](bool showing, bool fullscreen) {
+            assert(tracker->property("showingWindow").toBool() == showing);
+            assert(tracker->property("isCurrentWindowFullscreen").toBool() == fullscreen);
+            assert(tracker->property("windowCount").toInt() == (showing ? 1 : 0));
+        };
+        QJsonObject view{{"id", 1}, {"pid", 123}, {"app-id", "app"}, {"role", "toplevel"},
+                         {"layer", "workspace"}, {"mapped", true}, {"fullscreen", false}};
+        const auto send = [&](const char *event) {
+            connection.send(frame(QJsonDocument(QJsonObject{{"event", event}, {"view", view}}).toJson()));
+        };
+        check(false, false);
+        send("view-focused"); check(true, false);
+        view["fullscreen"] = true;
+        send("view-geometry-changed"); check(true, true); // no focus change needed
+        view["id"] = 2; view["fullscreen"] = false;
+        send("view-geometry-changed"); check(true, true); // another app cannot replace focus
+        view["id"] = 1; view["minimized"] = true;
+        send("view-minimized"); check(false, false);
+        view["minimized"] = false; view["fullscreen"] = true;
+        send("view-focused"); check(true, true);
+        send("view-unmapped"); check(false, false);
+        view["role"] = "desktop-environment"; view["layer"] = "overlay";
+        send("view-focused"); check(false, false); // panels/lock never count as apps
+        view["role"] = "toplevel"; view["layer"] = "workspace";
+        send("view-focused"); check(true, true);
+        connection.peer->disconnectFromServer(); pump();
+        check(false, false); // fail visible rather than retaining a hidden panel state
+        return 0;
+    }
     if (mode.startsWith("nav-")) {
         if (mode == "nav-guard") {
             assert(!navigate(connection, "showHome"));

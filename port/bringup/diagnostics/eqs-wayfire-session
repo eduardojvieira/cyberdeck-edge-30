@@ -9,5 +9,5 @@ test -f "$HOME/.config/plasma-mobile-wf/wayfire.ini"
 test "$(cat "$HOME/.config/startkderc")" = "$(printf '[General]\nsystemdBoot=false')"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 export KDE_NO_KWIN=1
-export KSCREEN_BACKEND=KSC_QScreen.so KSCREEN_BACKEND_INPROCESS=KSC_QScreen.so
+export KSCREEN_BACKEND=QScreen KSCREEN_BACKEND_INPROCESS=1
 exec /usr/bin/wayfire -c "$HOME/.config/plasma-mobile-wf/wayfire.ini"

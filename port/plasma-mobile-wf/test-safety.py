@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Offline host regression against pinned source, never PAM/phone/flash.
 
-Usage: test-safety.py SOURCE [--upstream] [--case CASE]
+Usage: test-safety.py SOURCE [--upstream | --prepared] [--case CASE]
 Default applies the local patch to a temporary source copy. --upstream proves RED.
+--prepared checks the supplied candidate as-is and prints its source hashes;
+it does not certify provenance or replace the pinned default build checks.
 """
 import argparse
 import hashlib
@@ -45,20 +47,30 @@ def run(command, **kwargs):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('source', type=Path)
-    parser.add_argument('--upstream', action='store_true')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--upstream', action='store_true')
+    mode.add_argument('--prepared', action='store_true', help='test an already patched candidate without applying patches')
     parser.add_argument('--no-navigation', action='store_true', help='test installed eqs1 safety patch without the navigation fix')
-    parser.add_argument('--case', choices=CASES)
+    parser.add_argument('--case', choices=(*CASES, 'nav-panel-state'))
     args = parser.parse_args()
+    if args.prepared and args.no_navigation:
+        parser.error('--prepared runs the current safety/navigation contract; omit --no-navigation')
+    if args.case == 'nav-panel-state' and not args.prepared:
+        parser.error('nav-panel-state is an upgrade candidate check; use --prepared')
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     for path, digest in PINS.items():
-        assert hashlib.sha256((args.source / 'components' / path).read_bytes()).hexdigest() == digest, path
+        actual = hashlib.sha256((args.source / 'components' / path).read_bytes()).hexdigest()
+        if args.prepared:
+            print(f'SOURCE SHA256 {actual} components/{path}', flush=True)
+        else:
+            assert actual == digest, path
     with tempfile.TemporaryDirectory(prefix='plasma-test-') as temp:
         work = Path(temp)
         for path in PINS:
             target = work / 'components' / path
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(args.source / 'components' / path, target)
-        if not args.upstream:
+        if not args.upstream and not args.prepared:
             patch = ['patch', '-p1', '--batch', '--forward', '--fuzz=0', '-i', str(BASE / 'fix-session-safety.patch')]
             run(patch + ['--dry-run'], cwd=work)
             run(patch, cwd=work)
@@ -86,7 +98,8 @@ def main():
              *flags, '-o', str(work / 'test-safety')])
         cases = [args.case] if args.case else CASES
         env = {**os.environ, 'EQS_TEST_RUNTIME': str(work), 'ASAN_OPTIONS': 'symbolize=0:detect_leaks=1',
-               'UBSAN_OPTIONS': 'halt_on_error=1:print_stacktrace=0'}
+               'UBSAN_OPTIONS': 'halt_on_error=1:print_stacktrace=0',
+               'EQS_TEST_TRACKER': str((args.source / 'components/windowplugin/qml/WindowMaximizedTracker.qml').resolve())}
         failed = []
         for case in cases:
             result = subprocess.run([str(work / 'test-safety'), case], env=env, timeout=15,

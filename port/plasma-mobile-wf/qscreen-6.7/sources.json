@@ -1,0 +1,65 @@
+[
+  {
+    "tag": "v6.3.4",
+    "path": "backends/qscreen/qscreenbackend.cpp",
+    "url": "https://raw.githubusercontent.com/KDE/libkscreen/6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855/backends/qscreen/qscreenbackend.cpp",
+    "sha256": "dcc24af12883e6a62065ce3f5e1b6ecce747bcee94ac67ad276f39c2cfc17aa3",
+    "commit": "6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855"
+  },
+  {
+    "tag": "v6.3.4",
+    "path": "backends/qscreen/qscreenbackend.h",
+    "url": "https://raw.githubusercontent.com/KDE/libkscreen/6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855/backends/qscreen/qscreenbackend.h",
+    "sha256": "2c00b3bdc683da5077678c2d2d686168fbaafa73e5a1835e136324240f6cff3e",
+    "commit": "6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855"
+  },
+  {
+    "tag": "v6.3.4",
+    "path": "backends/qscreen/qscreenconfig.cpp",
+    "url": "https://raw.githubusercontent.com/KDE/libkscreen/6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855/backends/qscreen/qscreenconfig.cpp",
+    "sha256": "f188d7089044ec3a6ed4064bee82fb41d4aaa2f2be58545212044cf8b7a91393",
+    "commit": "6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855"
+  },
+  {
+    "tag": "v6.3.4",
+    "path": "backends/qscreen/qscreenconfig.h",
+    "url": "https://raw.githubusercontent.com/KDE/libkscreen/6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855/backends/qscreen/qscreenconfig.h",
+    "sha256": "204e80ea7813e3257a24863eef96f0ce65761da4c4b81ea82feb77bc4c04bb6e",
+    "commit": "6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855"
+  },
+  {
+    "tag": "v6.3.4",
+    "path": "backends/qscreen/qscreenscreen.cpp",
+    "url": "https://raw.githubusercontent.com/KDE/libkscreen/6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855/backends/qscreen/qscreenscreen.cpp",
+    "sha256": "5fe77a07d6d01b5a5be6cc84f5cc86f52e6e1c89d957d90a8a308e780702a2d7",
+    "commit": "6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855"
+  },
+  {
+    "tag": "v6.3.4",
+    "path": "backends/qscreen/qscreenscreen.h",
+    "url": "https://raw.githubusercontent.com/KDE/libkscreen/6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855/backends/qscreen/qscreenscreen.h",
+    "sha256": "a26a154fcb2bd74805bea60f19849974b196af28f62802e1e4a64501559ea5d5",
+    "commit": "6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855"
+  },
+  {
+    "tag": "v6.3.4",
+    "path": "backends/qscreen/qscreenoutput.cpp",
+    "url": "https://raw.githubusercontent.com/KDE/libkscreen/6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855/backends/qscreen/qscreenoutput.cpp",
+    "sha256": "7c58fd37b6e598951b24595c30761f300047c27e36467c5a50ded7c0cf0dc6b3",
+    "commit": "6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855"
+  },
+  {
+    "tag": "v6.3.4",
+    "path": "backends/qscreen/qscreenoutput.h",
+    "url": "https://raw.githubusercontent.com/KDE/libkscreen/6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855/backends/qscreen/qscreenoutput.h",
+    "sha256": "c162801de0b78d3c56fe1dc212a8eaaf14177320199bd05d92b0dc2ba28d1ddf",
+    "commit": "6b53bd7bdd3982a42bf518f6cc524b2b4a8ee855"
+  },
+  {
+    "tag": "v6.7.4",
+    "path": "src/abstractbackend.h",
+    "url": "https://raw.githubusercontent.com/KDE/libkscreen/33432e490d0adc6c1ded65d2d24cf0ec7f24da0f/src/abstractbackend.h",
+    "sha256": "e7ce8070a8e95e52280570e269803c4365b219691d4f8ef887187f33507e482f",
+    "commit": "33432e490d0adc6c1ded65d2d24cf0ec7f24da0f"
+  }
+]

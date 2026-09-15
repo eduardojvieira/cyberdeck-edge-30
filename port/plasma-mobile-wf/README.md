@@ -1,5 +1,11 @@
 # Plasma/Wayfire navigation and session safety patches
 
+**September 15:** [6.7.5 is running on the phone](UPGRADE-6.7.md); desktop,
+panel hiding, edge reveal and Home/Recents are confirmed. The scoped lockscreen
+contrast fix `~pre2` is installed, pending activation; broader usability checks
+remain pending.
+The image recipe and the validated reference below remain eqs5.
+
 **September 11: `+eqs5` installed and active**, with localized dates and Spanish
 lockscreen labels; native packaged-resource tests pass. Only the plasmashell
 user unit was restarted after Eduardo unlocked and a desktop capture confirmed

@@ -1,0 +1,95 @@
+Subject: [PATCH] Preserve Droidian classic Wayfire session startup on Plasma 6.7.5
+
+Base: KDE/plasma-workspace v6.7.5 (cc1ab7963f94a9b76836412855caed6b94066188)
+
+Adapted from Droidian 781719c6098b88e32de0d3f509af391795162466.
+
+Development adaptation, not a promoted image input. See UPGRADE-6.7.md for
+completed ARM64 build/install checks and scoped session evidence.
+
+diff --git a/ksplash/ksplashqml/splashapp.cpp b/ksplash/ksplashqml/splashapp.cpp
+index 66ef17193..52eae0256 100644
+--- a/ksplash/ksplashqml/splashapp.cpp
++++ b/ksplash/ksplashqml/splashapp.cpp
+@@ -25,6 +25,7 @@
+ 
+ #define TEST_STEP_INTERVAL 2000
+ 
++int stage_count = 6;
+ /**
+  * There are 6 stages in ksplash
+  *  - initial (from this class)
+@@ -70,6 +71,9 @@ SplashApp::SplashApp(int &argc, char **argv)
+         adoptScreen(screen);
+     }
+ 
++    if (qEnvironmentVariableIsSet("KDE_NO_KWIN"))
++        stage_count = 5;
++
+     setStage(QStringLiteral("initial"));
+ 
+     if (KWindowSystem::isPlatformWayland()) {
+@@ -113,7 +117,7 @@ void SplashApp::setStage(const QString &stage)
+ void SplashApp::setStage(int stage)
+ {
+     m_stage = stage;
+-    if (m_stage == 6) {
++    if (m_stage == stage_count) {
+         QGuiApplication::exit(EXIT_SUCCESS);
+     }
+     for (SplashWindow *w : std::as_const(m_windows)) {
+diff --git a/startkde/plasma-session/startup.cpp b/startkde/plasma-session/startup.cpp
+index b66ebe7f1..9abb6eb6e 100644
+--- a/startkde/plasma-session/startup.cpp
++++ b/startkde/plasma-session/startup.cpp
+@@ -159,8 +159,12 @@ Startup::Startup(QObject *parent)
+     } else {
+         // This must block until started as it sets the WAYLAND_DISPLAY/DISPLAY env variables needed for the rest of the boot
+         // fortunately it's very fast as it's just starting a wrapper
+-        StartServiceJob kwinWaylandJob(QStringLiteral("kwin_wayland_wrapper"), {QStringLiteral("--xwayland")}, QStringLiteral("org.kde.KWinWrapper"));
+-        kwinWaylandJob.exec();
++        if (!qEnvironmentVariableIsSet("KDE_NO_KWIN")) {
++            StartServiceJob kwinWaylandJob(QStringLiteral("kwin_wayland_wrapper"), {QStringLiteral("--xwayland")}, QStringLiteral("org.kde.KWinWrapper"));
++            kwinWaylandJob.exec();
++        } else {
++            qCWarning(PLASMA_SESSION) << "KDE_NO_KWIN environment variable is set, kwin start is disabled, make sure another wayland compositor is running";
++        }
+         // kslpash is only launched in plasma-session from the wayland mode, for X it's in startplasma-x11
+ 
+         const KConfig cfg(QStringLiteral("ksplashrc"));
+@@ -174,16 +178,25 @@ Startup::Startup(QObject *parent)
+     KJob *phase1 = nullptr;
+     m_lock.reset(new QEventLoopLocker);
+ 
+-    const QList<KJob *> sequence = {
+-        new StartProcessJob(QStringLiteral("kcminit_startup"), {}),
+-        new StartServiceJob(QStringLiteral("kded6"), {}, QStringLiteral("org.kde.kded6"), {}),
+-        x11WindowManagerJob,
+-        new StartServiceJob(QStringLiteral("ksmserver"), QCoreApplication::instance()->arguments().mid(1), QStringLiteral("org.kde.ksmserver")),
+-        new StartupPhase0(autostart, this),
+-        phase1 = new StartupPhase1(autostart, this),
+-        new RestoreSessionJob(),
+-        new StartupPhase2(autostart, this),
+-    };
++    QList<KJob *> sequence;
++    if (!qEnvironmentVariableIsSet("KDE_NO_KWIN")) {
++        sequence.append(new StartProcessJob(QStringLiteral("kcminit_startup"), {}));
++    } else {
++        QProcess::startDetached(QStringLiteral("kcminit_startup"), {});
++        usleep(2000000);
++    }
++    sequence.append(new StartServiceJob(QStringLiteral("kded6"), {}, QStringLiteral("org.kde.kded6"), {}));
++    if (!qEnvironmentVariableIsSet("KDE_NO_KWIN")) {
++        sequence.append(x11WindowManagerJob);
++        sequence.append(new StartServiceJob(QStringLiteral("ksmserver"), QCoreApplication::instance()->arguments().mid(1), QStringLiteral("org.kde.ksmserver")));
++    }
++    sequence.append(new StartupPhase0(autostart, this));
++    sequence.append(phase1 = new StartupPhase1(autostart, this));
++    if (!qEnvironmentVariableIsSet("KDE_NO_KWIN")) {
++        sequence.append(new RestoreSessionJob());
++    }
++    sequence.append(new StartupPhase2(autostart, this));
++
+     KJob *last = nullptr;
+     for (KJob *job : sequence) {
+         if (!job) {

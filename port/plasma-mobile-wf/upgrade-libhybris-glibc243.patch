@@ -1,0 +1,61 @@
+Subject: [PATCH] Rebuild working eqs libhybris against libc 2.43
+
+Base: Droidian 99bb6098f44c5890cda0ee40d665da15dacd472e.
+Keep Android 30 headers and generated GLIBC_PRIVATE bounds.
+Only libhybris-common1 was installed for the Plasma upgrade. See UPGRADE-6.7.md
+for build/install evidence; fresh GPU-client validation remains pending.
+
+diff --git a/debian/changelog b/debian/changelog
+--- a/debian/changelog
++++ b/debian/changelog
+@@ -1,3 +1,13 @@
++libhybris (0.0.5.53-1+droidian0+z5+git20250520205628.99bb609.next.production+eqs1~glibc243) rolling; urgency=medium
++
++  * Rebuild the pinned working source against libc 2.43 for the eqs Plasma
++    upgrade. Keep HWC/Adreno behavior and Android 30 headers unchanged.
++  * Retain generated private-ABI dependency bounds; target validation pending.
++  * Backport upstream 9b543a4 to expose the required Vulkan beta declarations.
++  * Remove the obsolete shim series entry already present in the pinned source.
++
++ -- eqs port maintainers <eqs-port@localhost>  Tue, 15 Sep 2026 11:24:34 -0300
++
+ libhybris (0.1.0+git20200424-5) unstable; urgency=medium
+ 
+   * Rebuild
+diff --git a/debian/patches/series b/debian/patches/series
+--- a/debian/patches/series
++++ b/debian/patches/series
+@@ -1 +1 @@
+-env_hybris_ld_shim_libs.patch
++vulkan-enable-beta-headers.patch
+diff --git a/debian/patches/vulkan-enable-beta-headers.patch b/debian/patches/vulkan-enable-beta-headers.patch
+new file mode 100644
+--- /dev/null
++++ b/debian/patches/vulkan-enable-beta-headers.patch
+@@ -0,0 +1,26 @@
++From 9b543a4e6e1efdb82e80bf95e1cdd000990bdf98 Mon Sep 17 00:00:00 2001
++From: Alexander Rutz <alex@familyrutz.com>
++Date: Tue, 20 Jan 2026 07:07:52 -0700
++Subject: [PATCH] vulkan: enable VK_ENABLE_BETA_EXTENSIONS
++
++Fixes build failures caused by missing NV CUDA.
++error: 'vkCreateCudaModuleNV' undeclared here (not in a function); did you mean 'vkCreateCuModuleNVX'?
++---
++ hybris/vulkan/vulkan.c | 1 +
++ 1 file changed, 1 insertion(+)
++
++diff --git a/hybris/vulkan/vulkan.c b/hybris/vulkan/vulkan.c
++index 915ece6..3648550 100644
++--- a/hybris/vulkan/vulkan.c
+++++ b/hybris/vulkan/vulkan.c
++@@ -20,6 +20,7 @@
++ 
++ #define VK_USE_PLATFORM_ANDROID_KHR 1
++ #define VK_USE_PLATFORM_WAYLAND_KHR 1
+++#define VK_ENABLE_BETA_EXTENSIONS
++ 
++ #include <vulkan/vulkan.h>
++ #include <dlfcn.h>
++-- 
++2.55.0
++
