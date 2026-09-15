@@ -2,9 +2,10 @@
 
 ## Mandos y auriculares: revisión del 15 de septiembre
 
-**`joydev` está cargado en el teléfono y habilitado para próximos arranques,
-sin reflashear. Falta reconectar el mando Xbox y comprobar botones/ejes en
-el navegador.** No se hizo otro reinicio para probar persistencia.
+**Mando Xbox por Bluetooth funcionando: Eduardo lo probó después de instalar
+`joydev` y confirmó «lo probe y anda de 10» el 15 de septiembre.** El arreglo
+está cargado y habilitado para próximos arranques, sin reflashear.
+No se hizo otro reinicio para probar persistencia.
 
 ### Mando Xbox por Bluetooth
 
@@ -61,10 +62,13 @@ configuración e integridad pasaron en el teléfono. El arranque del servicio
 se omitió correctamente porque el módulo ya estaba cargado manualmente:
 **no equivale a haber probado un nuevo boot**.
 
-Para comprobar el mando, encenderlo, identificar el `js*` cuyo
+Para repetir la comprobación, encender el mando, identificar el `js*` cuyo
 `/sys/class/input/js*/device/name` sea Xbox y probar el tester HTTPS con foco,
-presionando un botón. No asumir un número fijo de nodo. Falta verificar ejes,
-botones, reconexión y navegador; tampoco se probó vibración.
+presionando un botón. No asumir un número fijo de nodo. La prueba de uso
+confirmada por Eduardo cierra el problema de reconocimiento reportado;
+no es una captura adicional del agente ni una matriz exhaustiva de cada
+botón/eje. Vibración, ciclos de reconexión, suspensión y persistencia tras
+reiniciar siguen pendientes.
 
 Para revertir, deshabilitar únicamente `eqs-h29-joydev.service`; en el siguiente
 reinicio no se cargará el módulo suplementario. No forzar `rmmod` mientras

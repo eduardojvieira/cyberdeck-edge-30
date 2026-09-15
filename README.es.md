@@ -67,7 +67,7 @@ Inicio/Recientes. Falta completar la matriz de uso; la receta de imagen sigue en
 | 🟡 Táctil de repuesto | Calibración libinput 2× confirmada **sólo para el repuesto de esta unidad**; no aplicarla a todos los `eqs`. |
 | 🟡 Teclado virtual | Interruptor **Teclado táctil** y `osk on/off` funcionan; el control es manual, no autodetección USB. |
 | 🟡 Audio y cámaras | Módulos/política stock corregidos; principal y frontal producen preview. Fix horizontal instalado; confirmación visual, fotos, auxiliares y calidad máxima pendientes. |
-| 🟡 Bluetooth | Inicialización/escaneo comprobados. Módulo `joydev` H29 instalado; pendientes Xbox en navegador y audio/micrófono de auriculares. [Detalles](docs/BLUETOOTH.md). |
+| 🟡 Bluetooth | Eduardo confirmó que el mando Xbox por Bluetooth funciona tras el arreglo `joydev` H29. Pendientes audio/micrófono de auriculares y persistencia de joydev tras reiniciar. [Detalles](docs/BLUETOOTH.md). |
 | 🟡 Hub USB-C | Hub y receptor RF funcionan con PD. **Conectar desde cero sin alimentación externa sigue fallando**; un swap permitió mantener una conexión ya iniciada. |
 | 🟡 GPU en aplicaciones | Wayfire usa Adreno 730. Ghostty/Zed habituales usan software; la prueba aislada de Zed acelerado aún no está integrada. |
 | 🔴 Daily cifrada | Pendiente. La preview no tiene LUKS y no debe tratarse como un equipo de trabajo endurecido. |
