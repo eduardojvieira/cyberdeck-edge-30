@@ -1,0 +1,3 @@
+# The virtual wake gesture device exposes axes/buttons but is not a gamepad.
+# Chromium checks property presence, so remove it rather than assigning "0".
+ACTION=="add|change", SUBSYSTEM=="input", ATTRS{name}=="double-tap", ENV{ID_INPUT_JOYSTICK}=""

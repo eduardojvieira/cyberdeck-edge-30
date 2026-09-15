@@ -67,7 +67,7 @@ funcionam. Falta completar a matriz de uso; a receita da imagem continua em
 | 🟡 Tela de toque substituída | Calibração libinput 2× confirmada **somente para a tela de reposição desta unidade**; não aplicar a todos os `eqs`. |
 | 🟡 Teclado na tela | O botão **Teclado táctil** e `osk on/off` funcionam; o controle é manual, sem detecção automática do teclado USB. |
 | 🟡 Áudio e câmeras | Módulos/política stock corrigidos; câmera principal e frontal geram prévias. Correção horizontal instalada; confirmação visual, fotos salvas, câmeras auxiliares e qualidade máxima continuam pendentes. |
-| 🟡 Bluetooth | Inicialização e busca após reiniciar verificadas; os perfis não foram validados exaustivamente. |
+| 🟡 Bluetooth | Inicialização/busca verificadas. Módulo `joydev` H29 instalado; pendentes Xbox no navegador e áudio/microfone de fones. [Detalhes](docs/BLUETOOTH.md). |
 | 🟡 Hub USB-C | Hub e receptor RF funcionam com PD. **Uma nova conexão sem alimentação externa ainda falha**; uma troca de função permitiu manter uma conexão já estabelecida. |
 | 🟡 GPU nos aplicativos | Wayfire usa a Adreno 730. As configurações habituais de Ghostty/Zed usam renderização por software; o teste isolado do Zed acelerado ainda não foi integrado. |
 | 🔴 Imagem diária criptografada | Pendente. A preview não tem LUKS e não deve ser tratada como um dispositivo de trabalho com segurança reforçada. |

@@ -1,0 +1,17 @@
+[Unit]
+Description=Joystick interface for the verified eqs H29 kernel
+ConditionKernelVersion=5.10.209-android13-0-gbd42a1bb7281
+ConditionPathExists=!/sys/module/joydev
+After=local-fs.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/usr/local/lib/eqs-h29-joydev
+ExecStartPre=/bin/sh -ec 'zcat /proc/config.gz | sha256sum | grep -qx "38e35affce93f0c08453b8c8577103edd9674c01b4edc7bb3179ef3d8bcd2c08  -"'
+ExecStartPre=/usr/bin/sha256sum --check --strict SHA256SUMS
+ExecStart=/usr/sbin/insmod /usr/local/lib/eqs-h29-joydev/joydev.ko
+RemainAfterExit=yes
+TimeoutStartSec=15
+
+[Install]
+WantedBy=multi-user.target

@@ -66,7 +66,7 @@ the image recipe remains **6.3.3 +eqs5**.
 | 🟡 Replacement touchscreen | 2× libinput calibration confirmed **only for this unit's replacement panel**; do not apply it to every `eqs`. |
 | 🟡 On-screen keyboard | The **Teclado táctil** toggle and `osk on/off` work; control is manual, not automatic USB keyboard detection. |
 | 🟡 Audio and cameras | Stock modules/policy corrected; main and front cameras produce previews. Landscape fix installed; visual confirmation, saved photos, auxiliary cameras and maximum quality remain pending. |
-| 🟡 Bluetooth | Initialization and scanning after reboot verified; profiles not exhaustively validated. |
+| 🟡 Bluetooth | Initialization/scanning verified. H29 `joydev` add-on installed; Xbox browser input and headphone audio/microphone tests pending. [Details](docs/BLUETOOTH.md). |
 | 🟡 USB-C hub | Hub and RF receiver work with PD. **A fresh connection without external power still fails**; a swap allowed an existing connection to keep running. |
 | 🟡 Application GPU acceleration | Wayfire uses the Adreno 730. The regular Ghostty/Zed setups use software rendering; the isolated accelerated Zed test is not integrated yet. |
 | 🔴 Encrypted daily-driver image | Pending. The preview has no LUKS and must not be treated as a hardened work device. |
