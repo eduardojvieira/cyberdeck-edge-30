@@ -8,10 +8,14 @@ import subprocess
 import sys
 
 root, assets = map(Path, sys.argv[1:3])
+edition = sys.argv[3] if len(sys.argv) > 3 else 'preview'
+assert edition in ('preview', 'current')
 inputs = json.loads((assets / 'INPUTS.json').read_text())
 version = subprocess.check_output(['dpkg-query', '--admindir=' + str(root / 'var/lib/dpkg'),
     '-W', '-f=${Version}', 'plasma-mobile-wf'], text=True)
-assert version == '6.3.3-1~git20250414214107.69444e6.next.upgrade.6.3+eqs5', version
+expected_mobile = ('6.7.5-0+eqs1~pre2' if edition == 'current' else
+                   '6.3.3-1~git20250414214107.69444e6.next.upgrade.6.3+eqs5')
+assert version == expected_mobile, version
 config = configparser.ConfigParser(interpolation=None)
 config.read(root / 'home/droidian/.config/plasma-mobile-wf/wayfire.ini')
 for group, key, value in [('core', 'transaction_timeout', '1000'), ('place', 'mode', 'maximize'),
@@ -44,6 +48,34 @@ for rel in ('home/droidian/.local/bin/osk', 'home/droidian/.local/bin/droidian-c
 assert 'syncLockWallpaper()' in (root / 'home/droidian/.local/share/plasma/wallpapers/org.kde.image/contents/ui/main.qml').read_text()
 assert 'current' in (root / 'etc/apt/apt.conf.d/90-droidian-snapshot').read_text()
 assert (root / 'etc/flash-bootimage/01prevent-flashing').read_text() == 'FLASH_BOOTIMAGE=no\n'
+if edition == 'current':
+    here = Path(__file__).resolve().parent
+    package_rows = (line.split('\t') for line in subprocess.check_output([
+        'dpkg-query', '--admindir=' + str(root / 'var/lib/dpkg'), '-W',
+        '-f=${Package}\t${Version}\t${db:Status-Abbrev}\n'], text=True).splitlines())
+    actual = {name.split(':')[0]: value for name, value, status in package_rows
+              if len(status) > 1 and status[1] == 'i'}
+    desired = dict(line.split('\t') for line in (here / 'current-package-versions.tsv').read_text().splitlines())
+    optional = {line.split('\t')[0] for line in (here / 'current-missing-packages.tsv').read_text().splitlines()}
+    assert set(actual) == set(desired) - optional, (len(actual), len(desired) - len(optional))
+    mismatches = {name: (actual.get(name), value) for name, value in desired.items()
+                  if name not in optional and actual.get(name) != value}
+    assert not mismatches, list(mismatches.items())[:20]
+    retained = dict(line.split('\t') for line in (here / 'current-protected-versions.tsv').read_text().splitlines()
+                    if not line.startswith('#'))
+    assert len(retained) == 258
+    assert all(actual.get(name) == value for name, value in retained.items())
+    selections = subprocess.check_output(['dpkg', '--admindir=' + str(root / 'var/lib/dpkg'),
+                                          '--get-selections'], text=True)
+    held = {line.split()[0].split(':')[0] for line in selections.splitlines() if line.endswith('\thold')}
+    assert set(retained) <= held, sorted(set(retained) - held)
+    assert (root / 'etc/apt/sources.list.d/debian-sid.sources').read_bytes() == (here.parent / 'apt/debian-sid.sources').read_bytes()
+    assert (root / 'etc/apt/preferences.d/50-eqs-sid.pref').read_bytes() == (here.parent / 'apt/50-eqs-sid.pref').read_bytes()
+    assert 'autoHidePanelsEnabled=true' in (root / 'home/droidian/.config/plasmamobilerc').read_text()
+    assert (root / 'etc/default/locale').read_text() == 'LANG=es_AR.UTF-8\nLANGUAGE=es_AR:es\n'
+    for service in ('multi-user.target.wants/ssh.service', 'sockets.target.wants/ssh.socket'):
+        path = root / 'etc/systemd/system' / service
+        assert not path.exists() and not path.is_symlink(), service
 profile = (root / 'etc/eqs-image-profile').read_text()
 touch = root / 'etc/udev/rules.d/99-eqs-replacement-touch-calibration.rules'
 if 'touch=replacement\n' in profile:
@@ -65,4 +97,4 @@ for rel in ('var/lib/halium/requires-lvm-resize',
             'etc/systemd/system/timers.target.wants/eqs-preview.timer',
             'etc/systemd/system/multi-user.target.wants/eqs-usb-host-test.service'):
     assert not (root / rel).exists() and not (root / rel).is_symlink(), rel
-print('PASS: image contains cumulative H29/Plasma/rotation/camera/Bluetooth/OSK fixes and clean identities')
+print(f'PASS: {edition} image contains H29/Plasma/rotation/camera/Bluetooth/OSK fixes and clean identities')

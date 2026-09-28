@@ -10,7 +10,9 @@ capture confirm the landscape desktop, populated dock, 200% scale and Spanish
 top-bar date. Eduardo also confirmed that panel hiding, edge reveal and
 Home/Recents work on the phone. This is not a complete usability or
 GPU-acceleration validation.
-The image inputs and known-good builder remain **6.3.3+eqs5**. Do not remove the
+The base preview remains **6.3.3+eqs5**. An offline `current` image variant now
+stages the exact 6.7.5 package cohort; it is not a physical clean-install test.
+Do not remove the
 custom-package holds or switch the phone to `next` to bypass dependency checks.
 
 ## What was verified

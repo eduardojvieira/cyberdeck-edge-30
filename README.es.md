@@ -52,8 +52,9 @@ de paquetes, conservando H29 y Wayfire/HWC. Tras corregir QScreen, un arranque
 posterior y una captura desbloqueada confirman el escritorio horizontal, escala
 200% y fecha en español. La ocultación de paneles está activada: Eduardo confirmó
 que las barras se ocultan, reaparecen al deslizar desde los bordes y responden
-Inicio/Recientes. Falta completar la matriz de uso; la receta de imagen sigue en
-**6.3.3 +eqs5**.
+Inicio/Recientes. Falta completar la matriz de uso. La preview base sigue en
+**6.3.3 +eqs5**; una receta offline opcional incorpora la cohorte actual de
+paquetes **6.7.5 + Sid**, sin afirmar que ya se probó una instalación limpia.
 [Evidencia y pendientes](port/plasma-mobile-wf/UPGRADE-6.7.md).
 
 | Área | Evidencia y límites |
@@ -70,6 +71,7 @@ Inicio/Recientes. Falta completar la matriz de uso; la receta de imagen sigue en
 | 🟡 Bluetooth | Eduardo confirmó que el mando Xbox por Bluetooth funciona tras el arreglo `joydev` H29. Pendientes audio/micrófono de auriculares y persistencia de joydev tras reiniciar. [Detalles](docs/BLUETOOTH.md). |
 | 🟡 Hub USB-C | Hub y receptor RF funcionan con PD. **Conectar desde cero sin alimentación externa sigue fallando**; un swap permitió mantener una conexión ya iniciada. |
 | 🟡 GPU en aplicaciones | Wayfire usa Adreno 730. Ghostty/Zed habituales usan software; la prueba aislada de Zed acelerado aún no está integrada. |
+| 🔴 Apagado | Eduardo reporta descarga de batería después de elegir apagar. Causa y apagado físico pendientes de verificar; una pantalla negra no demuestra que se haya apagado. |
 | 🔴 Daily cifrada | Pendiente. La preview no tiene LUKS y no debe tratarse como un equipo de trabajo endurecido. |
 
 🟢 Comprobado en la unidad de prueba · 🟡 Parcial o condicionado · 🔴 Pendiente
@@ -101,10 +103,11 @@ del contenedor que necesita Halium para el hardware.
 
 | Artefacto | Situación |
 | :--- | :--- |
-| Teléfono de desarrollo | H29 + Plasma `+eqs5`, fixes instalados y evidencia nativa documentada. |
-| Receta de este repositorio | Fija el paquete `+eqs5`; requiere sus **22 inputs locales** con SHA-256. |
-| ZIP construido el 10 de septiembre | Preview de 1,76 GiB con `+eqs4`; inspeccionada en host, **no validada como instalación limpia en el teléfono**. |
-| ZIP nuevo con `+eqs5` | **Todavía no construido.** No hay una descarga binaria pública en este repositorio. |
+| Teléfono de desarrollo | H29 + Plasma `6.7.5+eqs1~pre2`, política Sid y evidencia nativa documentada. |
+| Receta base | Fija `+eqs5`; requiere **22 inputs locales** con SHA-256. |
+| Receta de la cohorte actual | Agrega **1777 paquetes exactos de caché**, Plasma 6.7.5, política Sid y 258 holds; faltan seis paquetes opcionales instalados. Construir en host no valida el teléfono. |
+| ZIP construido el 10 de septiembre | Preview de 1,76 GiB con `+eqs4`; inspeccionada en host, **no validada como instalación limpia en el teléfono**. ZIP local eliminado; reconstruir desde inputs fijados si hace falta. |
+| ZIP nuevo | No publicado. Ver [estado de construcción e inputs faltantes](port/image/README.md). |
 
 Se construye desde una **base limpia**, nunca exportando la raíz viva,
 `/home`, cuentas o credenciales del teléfono. El ZIP del 1 de septiembre es
@@ -117,6 +120,8 @@ cd cyberdeck-edge-30
 # Sólo después de preparar Docker, binfmt ARM64 y los inputs locales.
 # La ruta de salida no debe existir. Este comando no flashea el teléfono.
 port/build-eqs-rootfs.sh --consolidated "$PWD/.work/eqs-image-new" stock
+# Para la cohorte actual 6.7.5/Sid y el repuesto táctil de Eduardo:
+sudo port/build-eqs-rootfs.sh --consolidated "$PWD/.work/eqs-current-new" replacement current
 ```
 
 - **Pantalla original:** perfil `stock`. **Repuesto calibrado de la unidad de
@@ -214,13 +219,24 @@ apt-mark showhold
 sudo apt -s upgrade
 ```
 
-Revisar firmas, downgrades y cambios Qt/Plasma/Halium antes de aplicar. No mezclar
-Sid, quitar holds a ciegas ni automatizar `full-upgrade`. PackageKit ya había
+Revisar firmas, downgrades y cambios Qt/Plasma/Halium antes de aplicar. No quitar
+holds a ciegas ni automatizar `full-upgrade`. PackageKit ya había
 sustituido el Plasma parcheado por upstream por prioridad 1002: el hold importa.
 La imagen protege Plasma/kernel y deshabilita escrituras de boot por triggers
 con `FLASH_BOOTIMAGE=no`; no garantiza cualquier upgrade. El launcher de cámara
 vuelve a Qt del sistema si cambia su versión y requiere reconstrucción.
 [Detalle de mantenimiento](docs/HISTORY-20260910.md#mantenimiento-apt-de-h29).
+
+El teléfono actual [prefiere Sid por defecto](port/apt/README.md), reteniendo el
+kernel, los parches del port y las dependencias ABI críticas mediante holds.
+No hay una lista de aplicaciones permitidas. El 26 de septiembre se actualizaron
+1.211 paquetes y se agregaron 111, sin retiros ni cambios en las 252 versiones
+retenidas originalmente. Al abrir Ghostty de nuevo apareció un SIGILL de Mesa:
+se restauraron sus seis paquetes a 25.0.7-2 y también se retuvieron (**258 en total**),
+recuperando el arranque de la terminal. La validación física sigue incompleta;
+validar configuración no equivale a probar una GUI. La receta opcional `current`
+incorpora esta cohorte; la preview anterior y el ZIP del 10/9 no. La imagen nueva
+todavía requiere una prueba propia en el teléfono.
 
 ## Documentación
 

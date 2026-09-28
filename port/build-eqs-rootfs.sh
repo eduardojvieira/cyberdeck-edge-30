@@ -12,7 +12,7 @@ case ${1:-} in
     --historical) shift ;;
     --inspect-existing) ;;
     *)
-        echo 'Use: port/build-eqs-rootfs.sh --consolidated NEW_OUTPUT_DIRECTORY stock|replacement' >&2
+        echo 'Use: port/build-eqs-rootfs.sh --consolidated NEW_OUTPUT_DIRECTORY stock|replacement [current]' >&2
         echo 'Historical September 1 build only: --historical [--reuse-packages]' >&2
         exit 1
         ;;

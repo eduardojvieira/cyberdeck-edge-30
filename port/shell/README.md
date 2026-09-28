@@ -10,7 +10,7 @@ en la rootfs limpia; el control OSK sí está integrado en la [receta consolidad
 - `Ctrl+R` con fzf, `z` con zoxide, `fzfbat`, `fzfnvim` y editor Neovim.
 - `bat` → `batcat`, `fd` → `fdfind`, `ls --color=auto` nativo de Debian.
 - JetBrainsMono Nerd Font regular/negrita; QMLKonsole conserva tamaño 10.
-- Ghostty con los colores Tokyo Night usados por la terminal de la PC.
+- Ghostty con Ryoku Paper Light, el tema claro actual de la PC, y fuente de 9 puntos.
 
 No se copiaron credenciales, historial, variables universales de Fish, Atuin,
 Fisher, Homebrew, Herdr automático, Carapace ni integraciones exclusivas de la PC.
@@ -176,7 +176,37 @@ de renderizado por software](https://docs.mesa3d.org/envvars.html).
 El comando configurado usa `env -u` antes de Fish para no transmitir los overrides
 gráficos a las aplicaciones del usuario. `env=VARIABLE=` en Ghostty 1.3.1 **no
 eliminó los valores heredados** en la prueba real. Se fuerza la integración Fish
-porque el ejecutable inicial es `env`. Se conserva `epoll`, como en la PC.
+porque el ejecutable inicial es `env`.
+
+**Regresión tras Sid (26 de septiembre):** Mesa 26.2.3/LLVM 22 provocaba SIGILL
+al abrir una instancia nueva: el core mostró una instrucción SVE que el hardware
+no anuncia como disponible para aplicaciones. Se restauró y retuvo el conjunto
+de seis paquetes Mesa 25.0.7-2, no Ghostty ni el resto de Sid. También se retiró
+un statoverride setuid obsoleto de Bubblewrap que rompía los iconos, conservando
+el sandbox. [Evidencia RED/GREEN y prueba nativa repetible](../apt/README.md#fresh-start-regression-and-targeted-recovery).
+Validar la configuración no basta: hay que abrir una terminal nueva y ejecutar
+su comando. No se cambió este wrapper, el tema, la fuente ni `async-backend`.
+
+### Cierre al conectar por SSH (26 de septiembre)
+
+Se reemplazó `async-backend = epoll`, heredado de la PC, por `auto`. Dos conexiones
+de prueba provocaron SIGSEGV en Ghostty 1.3.1. El core ARM64 mostró una cola vacía
+y acceso a `head.next` en `0x108`, con `completion.userdata` apuntando a esa cola:
+coincide con el fallo de escrituras epoll descrito en
+[libxev #234](https://github.com/mitchellh/libxev/issues/234). No se modificaron
+SSH, autenticación, Fish, fuentes ni renderizado para evitar el cierre.
+
+`auto` es el [valor recomendado por Ghostty](https://github.com/ghostty-org/ghostty/blob/v1.3.1/src/config/Config.zig#L3512-L3540).
+El cambio requiere cerrar **todas las ventanas de Ghostty** y abrirlo nuevamente;
+recargar la configuración sólo aplica el tamaño de fuente, no este backend.
+No es necesario reiniciar el teléfono. Se conservaron las sesiones abiertas.
+
+Tres procesos nuevos con la configuración instalada usaron `io_uring` (descriptores
+verificados en `/proc`) y completaron 3600 grupos de consultas/respuestas de
+terminal, todos con salida 0. `test-shell.py` pasó en PC y ARM64.
+Las reproducciones aisladas del saludo de la PC y las consultas de terminal no
+provocaron el fallo anterior de forma determinista: estos checks no sustituyen
+la prueba de una nueva conexión SSH del usuario.
 
 No se fuerza `maximize=true`: también en la prueba del 9 de septiembre mostraba
 una ventana del tamaño correcto, pero no arrancaba la terminal. La corrección
@@ -416,3 +446,44 @@ Los archivos descargados se conservaron en `.work/dev-packages/` del host y se
 retiraron los tarballs temporales del teléfono. Para revertir, cerrar sólo estas
 apps y retirar sus entradas/launchers y directorios nuevos; no restaurar configs
 completas encima de cambios posteriores, borrar credenciales ni hacer `autoremove`.
+
+## Moonlight Flatpak (25 de septiembre de 2026)
+
+Moonlight **6.1.0 ARM64**, instalado desde Flathub con KDE Platform **6.11**,
+necesita estos ajustes **sólo para la aplicación**, como usuario `droidian`:
+
+```sh
+flatpak override --user --env=QT_QUICK_BACKEND=software \
+  --env=SDL_RENDER_DRIVER=opengles2 com.moonlight_stream.Moonlight
+flatpak run com.moonlight_stream.Moonlight
+```
+
+También se aplican al icono existente de Plasma; no hace falta reinstalar,
+crear otro launcher ni cambiar los controladores. El override queda en
+`~/.local/share/flatpak/overrides/com.moonlight_stream.Moonlight`.
+Es un ajuste del teléfono, **no está incluido en la imagen consolidada**.
+
+Sin el ajuste Qt, la aplicación seguía viva con una superficie sin mapear:
+`Cannot find EGLConfig` y errores EGL `0x3005`/`0x300d`. El backend software
+resolvió esa parte, pero un reinicio de la app abortó durante los sondeos de
+vídeo con `egl_helper_has_mapping(surface)` de libhybris. Seleccionar OpenGL ES
+para SDL evitó ese aborto en los tres arranques siguientes; es un workaround,
+no una corrección del código de libhybris.
+
+**Verificado en el Edge:** tres arranques con el override persistido, incluido
+el `.desktop` mediante `gio launch`, y ventanas mapeadas a **1200 × 540** según
+Wayfire. Plasma y Wayfire no se reiniciaron. La pantalla estaba bloqueada:
+queda pendiente la comprobación visual del usuario y una sesión real de
+streaming. El sondeo terminó usando decodificación H.264 por software;
+no hay aceleración de vídeo ni rendimiento de streaming validados.
+
+Para revertir únicamente estos dos ajustes y conservar otros overrides:
+
+```sh
+flatpak override --user --unset-env=QT_QUICK_BACKEND \
+  --unset-env=SDL_RENDER_DRIVER com.moonlight_stream.Moonlight
+```
+
+Referencias: [backend software de Qt Quick](https://doc.qt.io/qt-6/qtquick-visualcanvas-adaptations.html),
+[selector de renderer SDL](https://wiki.libsdl.org/SDL2/SDL_HINT_RENDER_DRIVER),
+[overrides de Flatpak](https://docs.flatpak.org/en/latest/flatpak-command-reference.html#flatpak-override).

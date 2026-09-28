@@ -2,6 +2,7 @@
 """Host-only config/guard regression. Mounted-image acceptance is separate."""
 import configparser
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -52,4 +53,20 @@ with tempfile.TemporaryDirectory() as tmp:
 result = subprocess.run(['bash', str(here.parent / 'build-eqs-rootfs.sh')], capture_output=True)
 assert result.returncode != 0 and b'--consolidated' in result.stderr
 assert b'--historical' in result.stderr
-print('PASS: cumulative config, preserved settings, missing plugins, root/path guards, historical-build rejection')
+manifest = here / 'current-packages.json'
+versions = here / 'current-package-versions.tsv'
+targets = subprocess.check_output(['python3', str(here / 'current-targets.py'), str(manifest), str(versions)], text=True).splitlines()
+assert len(targets) == len(json.loads(manifest.read_text())) == 1777
+assert 'plasma-mobile-wf=6.7.5-0+eqs1~pre2' in targets
+assert not any(line.startswith('scilab-cli=') for line in targets)
+installed = {line.split('\t')[0] for line in versions.read_text().splitlines()}
+missing = {line.split('\t')[0] for line in (here / 'current-missing-packages.tsv').read_text().splitlines()}
+automatic = set((here / 'current-auto-packages.txt').read_text().splitlines())
+manual = set((here / 'current-manual-packages.txt').read_text().splitlines())
+assert not automatic & manual and automatic | manual == installed - missing
+with tempfile.TemporaryDirectory() as tmp:
+    wrong = Path(tmp) / 'wrong.json'
+    wrong.write_text(json.dumps({'plasma-mobile-wf_0_arm64.deb': {'path': '.work/unused', 'sha256': '0'}}))
+    result = subprocess.run(['python3', str(here / 'current-targets.py'), str(wrong), str(versions)], capture_output=True)
+    assert result.returncode != 0
+print('PASS: base guards and exact current package targets, including malformed-manifest rejection')

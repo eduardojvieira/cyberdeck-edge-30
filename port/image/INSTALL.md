@@ -19,6 +19,9 @@ No es daily cifrada ni una actualización in-place.
 - Cable directo, **sin hub**, batería cargada, backup propio comprobado, stock
   original y computadora con fastboot. B no es un backup y comparte userdata.
 - Leer `INPUTS.json`, `PACKAGES.tsv`, `RELEASE.txt`, `LVM.txt` y `FILESYSTEM.txt`.
+  Si el ZIP incluye `MISSING-PACKAGES.tsv`, leerlo también: la variante `current`
+  todavía no reproduce seis paquetes del teléfono, entre ellos Ghostty, VS Code
+  y ONLYOFFICE.
   Ejecutar `sha256sum --strict -c SHA256SUMS` y `bash flash-candidate.sh --check`.
   Estas dos comprobaciones no acceden al dispositivo.
 
@@ -65,10 +68,12 @@ requiere validación física autorizada**. Conservar el celular que ya funciona.
   sigue siendo una preview sin LUKS. No guardar secretos laborales allí.
   El initramfs de desarrollo conserva el canal USB de emergencia sin autenticación;
   no equivale a una imagen diaria endurecida.
-- APT queda en `current`, no `next`; Plasma/kernel se protegen con holds y
-  `FLASH_BOOTIMAGE=no`. Simular upgrades antes de aplicar, nunca quitar protecciones
-  para resolver dependencias a ciegas. La corrección privada de Qt5 se desactiva
-  ante un cambio de ABI y requiere reconstrucción, no bloquea APT.
+- APT de Droidian queda en `current`, no `next`. La variante base protege
+  Plasma/kernel; la variante `current` prefiere Debian Sid y retiene 258 paquetes
+  del port, incluido Mesa 25.0.7-2. Ambas tienen `FLASH_BOOTIMAGE=no`.
+  Simular upgrades antes de aplicar, nunca quitar protecciones para resolver
+  dependencias a ciegas. La corrección privada de Qt5 se desactiva ante un
+  cambio de ABI y requiere reconstrucción, no bloquea APT.
 - Herramientas personales/grandes se documentan aparte en `port/shell/`; esta
   base no clona Homebrew, entornos Python, logins, plugins privados ni `/home`.
 

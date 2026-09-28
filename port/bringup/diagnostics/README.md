@@ -28,11 +28,29 @@ repetir estas consultas. [Resultado y límites del diagnóstico ADC](../../../do
 
 ## Capturas de bring-up
 
+### Apagado pendiente de diagnosticar — 26 de septiembre de 2026
+
+Eduardo reporta descarga de batería después de seleccionar **Apagar** en el menú,
+sin hub ni cargador. El problema es anterior al upgrade general a Sid. La sesión
+gráfica devuelve `CanPowerOff=yes` y pasa las dos comprobaciones polkit de apagado;
+el `challenge` obtenido desde SSH no demuestra un fallo de permisos en Plasma.
+H29 registra PSCI 1.1 y usa `SYSTEM_OFF`, no el driver `msm-poweroff` de otras placas.
+
+No quedó un journal del arranque anterior; el ramoops archivado tiene bytes
+corruptos y actividad de servicios, pero ninguna frontera de apagado interpretable.
+Se preservaron ambos registros antes del upgrade y se amplió el límite del journal.
+**Esto no es un arreglo del apagado.** El siguiente ensayo autorizado debe capturar
+la petición del menú, la parada de servicios y, si llega, `reboot: Power down`.
+Ni perder SSH ni ver la pantalla negra prueba que la alimentación se haya cortado.
+No se ejecutó `poweroff`, reinicio ni flash durante esta investigación.
+
+### Perfil de captura existente
+
 **Preview H27 para prueba manual:** `eqs-preview.service` y `eqs-preview.timer` reutilizan la captura a los 90 segundos de cada arranque, pero con `SuccessAction=none` y `FailureAction=none`. Están instalados y sólo el timer preview quedó habilitado; no se arma a la vez el timer de retorno descrito abajo. La captura desarma únicamente el ensayo de retorno, conserva el timer preview y no repite periódicamente. La ventana de prueba de terminal dura unos 60 segundos: luego se abre QMLKonsole normalmente desde el lanzador.
 
 Este perfil no habilita SSH ni garantiza acceso independiente de la pantalla. Para retirarlo, quitar únicamente el enlace `timers.target.wants/eqs-preview.timer`; conservar las unidades/capturas de retorno y el rescate A. `test-capture.py` comprueba esta separación y ambas unidades pasaron el parser de systemd ARM64. No confundir timeout del servicio con una garantía de recuperación ante bloqueo del kernel.
 
-- `90-eqs-dev.conf` en `/etc/systemd/journald.conf.d/`: supera `Storage=volatile` del proveedor, limita journal a 32 MiB y reserva 128 MiB libres.
+- `90-eqs-dev.conf` en `/etc/systemd/journald.conf.d/`: supera `Storage=volatile` del proveedor, limita journal a 256 MiB y reserva 128 MiB libres. El límite anterior de 32 MiB ya había descartado los arranques previos al investigar el apagado el 26 de septiembre; ampliar el historial no corrige el apagado ni garantiza conservarlo indefinidamente.
 - `eqs-capture-once` en `/usr/local/sbin/`, ejecutable; unidad homónima en `/etc/systemd/system/`.
 - Para ensayo gráfico, instalar también `eqs-capture-once.timer` en `/etc/systemd/system/` y armar el enlace `timers.target.wants/eqs-capture-once.timer` a `../eqs-capture-once.timer`. Dispara a los 90 segundos; no habilitar la captura directamente en multi-user, porque puede bloquear el arranque que queremos observar.
 - En eqs se enmascaró sólo `serial-getty@hvc0.service` con enlace a `/dev/null`: fallaba con `208/STDIN`.

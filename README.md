@@ -51,8 +51,9 @@ Qt 6.10.2 GLES and Frameworks 6.28 passed native package checks, retaining H29
 and Wayfire/HWC. After the QScreen fix, a subsequent boot and an unlocked
 screen capture confirm the landscape desktop, 200% scale and Spanish date.
 Auto Hide Panels is enabled: Eduardo confirmed that the bars hide, reveal on
-edge swipes, and Home/Recents work. The full usability matrix remains pending;
-the image recipe remains **6.3.3 +eqs5**.
+edge swipes, and Home/Recents work. The full usability matrix remains pending.
+The base preview stays at **6.3.3 +eqs5**; an optional offline recipe now stages
+the current **6.7.5 + Sid** package cohort, without claiming a clean-install test.
 [Upgrade evidence and remaining work](port/plasma-mobile-wf/UPGRADE-6.7.md).
 
 | Area | Evidence and limitations |
@@ -69,6 +70,7 @@ the image recipe remains **6.3.3 +eqs5**.
 | 🟡 Bluetooth | Xbox controller over Bluetooth confirmed working by the owner after the H29 `joydev` fix. Headphone audio/microphone and joydev reboot persistence remain unverified. [Details](docs/BLUETOOTH.md). |
 | 🟡 USB-C hub | Hub and RF receiver work with PD. **A fresh connection without external power still fails**; a swap allowed an existing connection to keep running. |
 | 🟡 Application GPU acceleration | Wayfire uses the Adreno 730. The regular Ghostty/Zed setups use software rendering; the isolated accelerated Zed test is not integrated yet. |
+| 🔴 Power-off | Battery drain after selecting shutdown reported by the owner. Cause and actual hardware power-off remain unverified; a black screen is not proof of shutdown. |
 | 🔴 Encrypted daily-driver image | Pending. The preview has no LUKS and must not be treated as a hardened work device. |
 
 🟢 Verified on the test unit · 🟡 Partial or conditional · 🔴 Pending
@@ -100,10 +102,11 @@ from the container Halium needs for hardware integration.
 
 | Artifact | Status |
 | :--- | :--- |
-| Development phone | H29 + Plasma `+eqs5`, installed fixes and documented native evidence. |
-| This repository's build recipe | Pins the `+eqs5` package; requires **22 local inputs** with SHA-256 hashes. |
-| ZIP built on September 10 | 1.76 GiB preview with `+eqs4`; inspected on the host, **not validated as a clean installation on the phone**. |
-| New ZIP with `+eqs5` | **Not built yet.** This repository has no public binary download. |
+| Development phone | H29 + Plasma `6.7.5+eqs1~pre2`, Sid policy and documented native evidence. |
+| Base build recipe | Pins `+eqs5`; requires **22 local inputs** with SHA-256 hashes. |
+| Current-cohort recipe | Adds **1777 exact cached packages**, Plasma 6.7.5, Sid policy and 258 protected holds; six optional installed packages remain unavailable. Host build is not a phone validation. |
+| ZIP built on September 10 | 1.76 GiB preview with `+eqs4`; inspected on the host, **not validated as a clean installation on the phone**. Local ZIP removed; rebuild from pinned inputs if needed. |
+| New ZIP | Not published. See [build status and missing inputs](port/image/README.md). |
 
 The image is built from a **clean base**, never by exporting the live root,
 `/home`, accounts or credentials from the phone. The September 1 ZIP is
@@ -116,6 +119,8 @@ cd cyberdeck-edge-30
 # Only after preparing Docker, ARM64 binfmt and the local inputs.
 # The output path must not exist. This command does not flash the phone.
 port/build-eqs-rootfs.sh --consolidated "$PWD/.work/eqs-image-new" stock
+# To compose the current 6.7.5/Sid cohort for Eduardo's replacement screen:
+sudo port/build-eqs-rootfs.sh --consolidated "$PWD/.work/eqs-current-new" replacement current
 ```
 
 - **Original screen:** use the `stock` profile. **The development unit's calibrated
@@ -214,12 +219,22 @@ sudo apt -s upgrade
 ```
 
 Review signatures, downgrades and Qt/Plasma/Halium changes before applying them.
-Do not mix in Sid, blindly remove holds or automate `full-upgrade`. PackageKit
+Do not blindly remove holds or automate `full-upgrade`. PackageKit
 already replaced patched Plasma with upstream due to priority 1002: the hold matters.
 The image protects Plasma/kernel and disables boot writes from triggers
 with `FLASH_BOOTIMAGE=no`; this does not guarantee every upgrade is safe.
 The camera launcher falls back to system Qt if its version changes and requires a rebuild.
 [Maintenance details](docs/HISTORY-20260910.md#mantenimiento-apt-de-h29).
+
+The current phone [prefers Sid by default](port/apt/README.md), retaining the
+kernel, port patches and critical ABI dependencies through package holds.
+There is no application allowlist. On September 26, 1,211 packages were upgraded
+and 111 added, with no removals or changes to the original 252 retained versions.
+A fresh Ghostty launch exposed a Mesa SIGILL: its six runtime packages were
+restored to 25.0.7-2 and retained too (**258 total**), restoring terminal startup.
+Physical validation remains incomplete; a configuration check is not a GUI test.
+The optional `current` recipe stages this package cohort; the older preview
+and September 10 ZIP do not. The new image still requires its own phone test.
 
 ## Documentation
 

@@ -4,10 +4,64 @@
 Reutiliza el arranque H29 probado; no recompila otro kernel durante la
 consolidación. La imagen nueva requiere una validación física propia.
 
-**Receta actualizada el 11 de septiembre:** fija Plasma `+eqs5`, con fechas
+**Receta base del 11 de septiembre:** fija Plasma `+eqs5`, con fechas
 sensibles al idioma y textos españoles del bloqueo. El paquete se comprueba
 con Qt 6.8.2; **el ZIP del 10 de septiembre conserva `+eqs4` y no fue modificado**.
 Hace falta una nueva construcción/validación para obtener un ZIP con este cambio.
+
+## Cohorte actual (28 de septiembre)
+
+La variante `current` parte de la misma base limpia y del **mismo boot H29**.
+Instala offline 1777 `.deb` exactos de la actualización comprobada en el
+teléfono: Plasma Mobile/Workspace 6.7.5 adaptados, QScreen, libhybris para
+glibc 2.43, Qt/KDE y aplicaciones Sid. Conserva las versiones y los 258 holds
+de [`port/apt/`](../apt/), incluido Mesa 25.0.7-2. Activa el ocultamiento de
+paneles y `es_AR.UTF-8`. No reconstruye el kernel ni copia `/home` vivo.
+
+```sh
+sudo port/build-eqs-rootfs.sh --consolidated "$PWD/.work/eqs-current-build" replacement current
+```
+
+Salida temporal: `build/eqs-current-20260928.zip` y `build/SHA256SUMS` bajo la
+carpeta nueva. No hace falta conservar el ZIP después de verificarlo si los
+inputs locales y la receta permanecen disponibles.
+
+`current-packages.json` fija rutas privadas y SHA-256 de los `.deb`;
+`current-package-versions.tsv` es el inventario **sólo de paquetes instalados**
+(estados `ii`/`hi`). `current-protected-versions.tsv` fija el subconjunto de
+riesgo y `current-{auto,manual}-packages.txt` conserva la distinción APT
+automático/manual.
+Se rechazan inputs ausentes o alterados, una transacción irresoluble,
+versiones distintas y holds faltantes. La instalación usa un índice APT local,
+sin red, y mantiene bloqueados los scripts que intenten iniciar servicios o
+flashear. El ZIP no contiene los `.deb` temporales ni los datos personales.
+Aunque la cohorte incluye `openssh-server` del perfil de desarrollo, el servicio
+queda deshabilitado y las host keys se eliminan de la imagen limpia.
+Estos SHA fijan los binarios locales, pero no sustituyen una firma de origen;
+las fuentes/parches de las cuatro adaptaciones propias se documentan en
+[`UPGRADE-6.7.md`](../plasma-mobile-wf/UPGRADE-6.7.md).
+
+**No es una réplica completa del teléfono.** Los archivos exactos de seis
+paquetes instalados no están conservados: `byobu`, `hollywood` (depende de
+`byobu`), `code`, `ghostty`, `onlyoffice-desktopeditors` y `python3-newt`.
+La receta los enumera en `current-missing-packages.tsv` y en el ZIP, sin
+reemplazarlos por versiones parecidas ni exportar binarios desde el teléfono.
+La receta tampoco incluye Flatpaks, imágenes/datos de Waydroid, Homebrew,
+cuentas, plugins ni configuración personal. Para una réplica completa hacen
+falta los `.deb` verificables y una reinstalación separada de esas capas.
+
+Esta cohorte se ensaya **en host**. Aunque un ZIP pase hashes, `dpkg --audit`,
+`apt-get check` y fsck, sigue sin validación de arranque limpio, gráficos,
+periféricos y recuperación en el Edge. No flashearlo como daily cifrada.
+
+**Build host del 28/9:** 22 inputs base y 1777 paquetes SHA verificados;
+simulación/instalación offline de 1094 upgrades, 682 altas y seis retiros
+previstos; 2054 paquetes finales, 258 holds y selecciones APT 1837 auto /
+217 manual. `dpkg --audit`, `apt-get check`, verificador de rootfs, fsck final,
+manifiesto ZIP y `unzip -t` pasaron. No hubo acceso ni flash al teléfono.
+El ZIP de 5.908.942.990 bytes tuvo SHA-256
+`f10e2725b856c8fd589bd49078211557f57322aa59854176013623ec29c9176f`;
+es evidencia histórica, no un artefacto publicado ni byte-reproducible.
 
 ## Construir
 
@@ -62,8 +116,9 @@ reboots automáticos ni experimentos USB ADC/POR/swap. Loader stock administra A
 
 **Un clon Git solo no contiene estos binarios ni firmware.** Esta entrega
 reproduce la **composición desde inputs conservados**, no promete build desde
-cero ni ZIP byte-idéntico (UUID/LVM/ext4/timestamps). Conservar `inputs/` privado
-junto al ZIP. Manifiesto final: fuentes, paquetes, inputs, geometría y hashes.
+cero ni ZIP byte-idéntico (UUID/LVM/ext4/timestamps). Conservar las rutas privadas
+de `inputs.json`; el ZIP generado no necesita guardarse entre builds. Manifiesto
+final: fuentes, paquetes, inputs, geometría y hashes.
 Los paquetes kernel dpkg conservan etiquetas históricas; no reinstalarlos para
 «alinearlos» con el kernel H29 realmente ejecutado.
 

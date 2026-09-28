@@ -1,0 +1,6 @@
+libopenexr-3-1-30
+libplasma6
+libplasmaactivities6
+libplasmaquick6
+libprocesscore10
+milou

@@ -1,6 +1,6 @@
 # Repositorios de referencia
 
-Se conservaron doce de los quince repositorios inspeccionados. Los clones son locales, superficiales e ignorados por Git; sirven para comparar fuentes y empaquetado, pero no son todavía entradas de una release.
+Se seleccionaron doce de los quince repositorios inspeccionados. Sus clones locales se retiraron para liberar espacio; los commits fijados siguen documentados y los ocho inputs necesarios para builds se recrean con `reference/bootstrap-build-sources.sh`. No son todavía entradas de una release.
 
 ## Resultado
 
@@ -35,7 +35,7 @@ No copiar imágenes, módulos, DTB/DTBO, firmware ni overlays de Bronco o Zeekr.
 
 ## Ubicación y tamaño
 
-Los doce clones retenidos viven bajo `reference/repos/`. Todos fueron clonados con `--depth 1 --single-branch`; el submódulo Lindroid también es superficial.
+Los clones se crean bajo `reference/repos/` sólo cuando hacen falta. Se obtienen de forma superficial; los que no cubre el bootstrap se pueden recuperar a partir de los repositorios y commits de la tabla.
 
 ## Preflight de checkout limpio
 

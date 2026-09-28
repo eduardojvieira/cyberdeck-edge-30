@@ -1,0 +1,6 @@
+Types: deb
+URIs: https://deb.debian.org/debian
+Suites: sid
+Components: main
+Architectures: arm64
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg

@@ -1,0 +1,10 @@
+# Sid is preferred for ordinary packages, without forcing downgrades.
+Package: *
+Pin: release o=Debian,n=sid
+Pin-Priority: 991
+
+# Specific rule overrides Droidian global 1002 without editing its packaged file.
+# Install the holds in protected-packages.txt BEFORE enabling this policy.
+Package: /^.+$/
+Pin: release o=Droidian
+Pin-Priority: 990
