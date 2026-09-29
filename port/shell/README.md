@@ -166,6 +166,38 @@ directorio/enlace. Para revertir, cerrar sus sesiones y retirar sólo los enlace
 directorios y archivos enumerados en los manifiestos del respaldo; no borrar
 configuraciones completas si ya tienen cambios, sesiones o credenciales nuevas.
 
+### PC configuration refresh (September 29)
+
+The live phone now uses Codex CLI **0.159.0** (pinned official npm package) and
+Pi **0.87.1** (official ARM64 release, SHA-256 verified), matching the PC.
+The previous bundles remain installed for rollback. Codex's default model was
+updated to `gpt-6-sol`; Pi's settings, model profiles, 24 agent files, chains,
+extension manifest and 327 npm packages were synchronized from the
+PC. Pi's authoritative `~/.pi/gentle-ai/models.json` was also copied: the old
+phone file had been resetting agent routes to `gpt-6-astra` at startup. Pi's
+RPC `get_state` now preserves the PC's routes; Codex parses its configuration and lists
+plugins. Those initial checks did not authenticate or run a model request; the
+later live checks are described below.
+
+Fish keeps its Droidian-safe interactive profile instead of blindly copying
+Ryoku's desktop-specific `user.fish`: it now matches the PC's `cd`/zoxide,
+fd-backed fzf shortcuts, mise activation and eza aliases. The PC's Starship
+prompt and Yazi opener configuration were copied; its daemon-generated Yazi
+theme was not. Yazi and GitUI were already installed through ARM64 Homebrew;
+the PC has no GitUI config to copy. The missing general Codex `atopile-pcb`
+skill was added; platform-specific Ryoku/Omarchy skills were not copied.
+Existing phone-specific MCP paths and plugin catalogs were preserved. The
+host and phone have the same four Pi MCP server names; no auth files, tokens,
+session databases or native `node_modules` from x86 were copied **by this agent**.
+Eduardo later transferred the Codex/Pi credential stores himself; both clients
+completed a live GPT-6 Sol request without displaying secrets. Tavily MCP still
+reported `AuthRequired`, so MCP authentication is separate. ChatGPT Desktop
+sign-in remains Eduardo's step. Private pre-sync
+backup on the phone: `~/.local/state/eqs-pc-config-20260929/pre-sync.tar.gz`.
+These changes are on the live phone, **not in the rootfs recipe**.
+The PC-only `work-pets` Codex plugin is not available in the phone's configured
+marketplaces; it was not sideloaded from a desktop cache.
+
 ## Particularidad gráfica de Ghostty
 
 En H29, el arranque directo falla al crear el contexto OpenGL. El wrapper usa

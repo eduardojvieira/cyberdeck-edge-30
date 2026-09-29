@@ -149,9 +149,10 @@ sudo port/build-eqs-rootfs.sh --consolidated "$PWD/.work/eqs-current-new" replac
 |---|---|
 | Terminal | Fish/Starship, fzf, zoxide, Neovim, Ghostty 1.3.1 y Hollywood/tmux aislado. [Shell](port/shell/README.md). |
 | Desarrollo | Homebrew ARM64, mise, uv, GitHub CLI, Brew Browser como única GUI de Brew; GitUI, Lazygit, Yazi, ncdu, Mosh y Restic. |
-| Editores/agentes | VS Code, Antigravity/CLI, Zed, Herdr, Codex y Pi con configuración portable; sin copiar almacenes de credenciales, logins remotos pendientes. |
+| Editores/agentes | VS Code, Antigravity/CLI, Zed, Herdr, Codex, Pi, Typora, Obsidian y la preview oficial de ChatGPT Desktop para Linux. Configuración de la PC adaptada a ARM64; Eduardo copió manualmente las credenciales de Codex/Pi y ambos pasaron pruebas reales con el modelo. Queda pendiente el login de ChatGPT Desktop. [Detalles](port/shell/README.md#pc-configuration-refresh-september-29). |
 | Ciencia | Octave 11.3, wxMaxima 26.08/Maxima 5.50, Python científico, SageMath, Spyder, JupyterLab y Scilab **2026.1** ARM64. Scilab APT 2024 fue retirado y 2026 revalidado. [Ciencia](port/shell/SCIENCE.md). |
 | Oficina | ONLYOFFICE 9.4 ARM64 con repositorio oficial limitado a esa app. [Oficina](port/shell/OFFICE.md). |
+| Toolbox de campo (29 de septiembre) | Qalculate!, ConvertAll vía Waydroid, herramientas MQTT/serie/Modbus, diagnóstico de redes y señales, utilidades de datos/PDF/imágenes/audio, Dev Toolbox, PDF Arranger, MQTTX y CyberChef local. [Paquetes, pruebas y límites](port/shell/TOOLBOX.md). |
 | Android (11–12 de septiembre) | Waydroid + Android 13 GAPPS/Google Play instalados sin flash; arranque Android, red y apertura desde KDE comprobados. Acceso de Play Store habilitado en Plasma; login del usuario pendiente. Integración experimental, no incluida en el ZIP limpio. [Uso, ajustes y límites](port/waydroid/README.md). |
 
 Estas herramientas están en el teléfono; la imagen base no clona Homebrew,

@@ -59,6 +59,31 @@ The manifest excludes noninstalled packages and unneeded holds on branding,
 archive keys, `firefox-mobile-config` and package-sideload. Existing user holds
 must be preserved as well.
 
+### Application ABI blockers (2026-09-29)
+
+On the live phone, `apt-get -s --no-remove --no-upgrade` rejected four requested
+Sid applications for concrete dependencies, not because APT itself is broken:
+
+| Application | Sid dependency | Retained phone library |
+| --- | --- | --- |
+| Okteta, DB Browser for SQLite | Qt 5 `qtbase-abi-5-15-19` | Droidian Qt 5.15.15, including the camera-related cohort |
+| LabPlot 2.12.1 | Qt 6.11.2 and `qt6-base-private-abi (= 6.11.2)` | Qt 6.10.2 with downstream GLES/Plasma integration |
+| Meld 3.24.0 | GLib ≥ 2.86 through `python3-gi-cairo` | Droidian GLib 2.84.3 with downstream changes |
+
+Even requesting the older Droidian application versions did not yield a clean
+transaction under the current mixed repositories. Four ARM64 Flathub packages
+were installed instead: their runtimes are separate from the phone's APT Qt
+and GLib. This makes the applications available without claiming the system
+libraries can now be upgraded. Short launches passed; usability needs checking
+on the touchscreen.
+
+To advance the **system** libraries later, work one source cohort at a time:
+inventory reverse dependencies and downstream patches, build matching Qt/GLib
+and patched consumers in a staging rootfs, simulate the complete APT transaction
+with zero removals/boot changes, then validate the result on the device with a
+known recovery path. In particular, Qt private-ABI consumers must be rebuilt
+against the exact new version; a lone `apt-mark unhold` is not that migration.
+
 ## Configuration
 
 - `debian-sid.sources` → `/etc/apt/sources.list.d/debian-sid.sources`:

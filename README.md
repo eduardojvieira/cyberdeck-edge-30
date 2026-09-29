@@ -148,9 +148,10 @@ sudo port/build-eqs-rootfs.sh --consolidated "$PWD/.work/eqs-current-new" replac
 |---|---|
 | Terminal | Fish/Starship, fzf, zoxide, Neovim, Ghostty 1.3.1 and isolated Hollywood/tmux. [Shell](port/shell/README.md). |
 | Development | ARM64 Homebrew, mise, uv, GitHub CLI, Brew Browser as the only Brew GUI; GitUI, Lazygit, Yazi, ncdu, Mosh and Restic. |
-| Editors/agents | VS Code, Antigravity/CLI, Zed, Herdr, Codex and Pi with portable configuration; credential stores not copied, remote logins pending. |
+| Editors/agents | VS Code, Antigravity/CLI, Zed, Herdr, Codex, Pi, Typora, Obsidian and the official ChatGPT Desktop Linux preview. PC configuration adapted for ARM64; Eduardo copied Codex/Pi credentials manually and both passed live model checks. ChatGPT Desktop login remains pending. [Details](port/shell/README.md#pc-configuration-refresh-september-29). |
 | Science | Octave 11.3, wxMaxima 26.08/Maxima 5.50, scientific Python, SageMath, Spyder, JupyterLab and ARM64 Scilab **2026.1**. APT Scilab 2024 was removed and 2026 revalidated. [Science](port/shell/SCIENCE.md). |
 | Office | ARM64 ONLYOFFICE 9.4 with its official repository scoped to that app. [Office](port/shell/OFFICE.md). |
+| Field toolbox (September 29) | Qalculate!, ConvertAll via Waydroid, MQTT/serial/Modbus tools, network and signal diagnostics, data/PDF/image/audio utilities, Dev Toolbox, PDF Arranger, MQTTX and offline CyberChef. [Installed packages, checks and limits](port/shell/TOOLBOX.md). |
 | Android (September 11–12) | Waydroid + Android 13 GAPPS/Google Play installed without flashing; Android startup, networking and KDE launch checked. Play Store shortcut made visible in Plasma; user login pending. Experimental integration, not included in the clean ZIP. [Usage, adjustments and limitations](port/waydroid/README.md). |
 
 These tools are on the phone; the base image does not clone Homebrew,
