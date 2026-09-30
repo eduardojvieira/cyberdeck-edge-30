@@ -211,6 +211,50 @@ substitutes for this fresh-start test. Keep Mesa retained until the same check
 and affected applications pass with the proposed replacement. Do not enable SVE
 blindly, turn off sandboxing, or remove the rest of the Sid policy as a workaround.
 
+### Incremental update — September 29
+
+A fresh signed-index preflight passed with **56 upgrades, two additions and zero
+removals**. The authorized update completed; a separate reviewed transaction
+installed **nine new packages** for Geany, TurboWarp, DNS and packet-capture tools.
+All 258 hold selections, their installed versions and `FLASH_BOOTIMAGE=no` were
+preserved. Final preflight: **0 upgrades/additions/removals, 399 kept back**;
+`dpkg --audit` empty. ChatGPT Desktop is now 26.928.20755. The existing Flatpak
+remote reported no pending updates; personal pinned bundles were not replaced.
+
+Wayfire and Plasma kept their PIDs; Android LXC, NetworkManager, BlueZ and
+bluebinder are active. Fresh Geany/C/Ghostty tests passed; TurboWarp needed a
+process-local rendering override, documented in the [toolbox](../shell/TOOLBOX.md).
+No reboot, desktop restart or flash was performed. This is live-install evidence,
+not a refresh of the frozen image cohort or a post-reboot hardware validation.
+Scoped package inventories and the upgrade log are private under
+`/var/cache/eqs-toolbox-20260929/`; this directory is **not** a tested rollback image.
+
+
+### Security-toolbox additions — September 29
+
+A later, separate app-only expansion added **153 binary packages including
+libraries**, with zero changes to previous installed versions or hold selections.
+Install plans used `--no-remove --no-install-recommends --no-upgrade`; the newly
+added pure-Python `python3-legacy-cgi` was then advanced to its compatible Sid
+2.6.4-3 candidate. No pre-session installed version changed. H29 and all 258
+holds remain intact; no new APT sources were added for this expansion. Wfuzz
+needed the explicitly selected Python 3.13-compatible Droidian PycURL dependency;
+its current Sid PycURL stack would conflict with `python3-gbinder`.
+Native ConvertAll instead reuses the isolated science PyQt5 runtime. Installed
+packages, incompatible candidates and runtime checks are documented in the
+[security toolbox](../shell/TOOLBOX.md#eqs-hacking-toolbox).
+
+Post-expansion `check-policy.py` still passes, with **zero upgrades,
+additions or removals and 400 kept back**. This is not an assertion
+that every latest Sid package can install. Private inventories/logs are under
+`~/.local/state/eqs-hacking/` and `/var/cache/eqs-security-toolbox-20260929/`;
+no rollback image was created or exported.
+
+The subsequent terminal-UI replacement installed `python3-textual=8.2.8-1`
+and six Python dependencies. Its scoped simulation and APT/dpkg transaction
+logs show seven additions and zero upgrades/removals; all 258 hold selections
+are unchanged. No venv, kernel, graphics cohort or image recipe was modified.
+
 ## Rollback of the policy
 
 The previous APT configuration, selections and package inventory are kept

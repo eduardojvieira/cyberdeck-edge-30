@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=EQS Ingeniería
+Name[en]=EQS Engineering
+Name[pt_BR]=EQS Engenharia
+Comment=Escalado industrial, dosificación, movimiento, datos y ciencia
+Exec=/home/droidian/.local/bin/ghostty --gtk-single-instance=false -e /home/droidian/.local/bin/eqs-field-toolbox engineering
+TryExec=/home/droidian/.local/bin/eqs-field-toolbox
+Icon=applications-engineering
+Terminal=false
+Categories=Science;Engineering;
+Keywords=ingenieria;4-20mA;dosificacion;husillo;torque;geometria;octave;scilab;toolbox;
+DBusActivatable=false
+StartupNotify=true

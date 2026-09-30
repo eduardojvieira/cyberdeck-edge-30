@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+"""Manual EQS security toolbox; no background activity or automatic scanning."""
+import getpass
+import ipaddress
+import os
+from pathlib import Path
+import re
+import shlex
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+
+TOOL_PATH = os.environ.get('PATH', os.defpath) + ':/usr/sbin:/sbin'
+
+TOOLS = {
+    'network': ('Red', 'Interfaces y rutas', 'Muestra IP, rutas y conexiones locales. No envía tráfico. ip -br address / ip route / nmcli device status.'),
+    'listeners': ('Red', 'Puertos abiertos en el Edge', 'ss -lntup: servicios que escuchan en ESTE teléfono, no en otros equipos. Sin sudo puede faltar el nombre de procesos ajenos.'),
+    'ping': ('Red', 'Probar conexión (ping)', 'Ingresá una única IP autorizada. Envía cuatro paquetes ICMP; Ctrl+C cancela. Que no responda no demuestra que el equipo esté apagado.'),
+    'dns': ('Red', 'Consultar DNS', 'Ingresá un dominio, por ejemplo example.com. dig consulta el DNS configurado; esta operación usa la red.'),
+    'ports': ('Red', 'Escanear 100 puertos TCP', 'Nmap TCP connect sobre UNA IP elegida, hasta 30 segundos. Requiere confirmación. No ejecuta exploits, scripts NSE ni detección de versiones. Incluso un escaneo puede afectar equipos industriales: sólo con autorización y ventana de prueba.'),
+    'capture': ('Red', 'Capturar tráfico propio', 'Elegí una interfaz y confirmá. tcpdump guarda hasta 200 paquetes, 128 bytes por paquete, durante un máximo de 60 segundos. Requiere sudo. Capturas privadas en ~/Documents/EQS-Capturas; pueden contener información sensible. No habilita modo monitor.'),
+    'wifi': ('Wi-Fi y Bluetooth', 'Wi-Fi: redes ya conocidas', 'nmcli device wifi list --rescan no: muestra la caché disponible sin iniciar un escaneo ni cambiar tu conexión.'),
+    'bluetooth': ('Wi-Fi y Bluetooth', 'Bluetooth: estado y vinculados', 'bluetoothctl show / devices Paired. Consulta el controlador y los emparejamientos existentes; no escanea, desconecta ni cambia perfiles.'),
+    'usb': ('USB', 'Dispositivos USB y puertos serie', 'lsusb / lsusb -t y listado de /dev/serial/by-id. No abre puertos ni envía comandos. Para trabajar manualmente: tio --help o sigrok-cli --help. Un puerto serie puede accionar hardware; no abrirlo sin conocer DTR/RTS y el equipo.'),
+    'hash': ('Archivos', 'Calcular SHA-256', 'Ingresá la ruta de un archivo. sha256sum calcula su huella sin modificarlo. Compará el resultado con una fuente confiable; un hash solo no prueba autenticidad.'),
+    'hex': ('Archivos', 'Inspeccionar binario', 'Ingresá la ruta de un archivo. od muestra los primeros 4096 bytes en hexadecimal y texto; no modifica el original.'),
+    'cyberchef': ('Archivos', 'CyberChef offline', 'Abre el CyberChef local en Chromium para Base64, hex, JSON, hashes y transformaciones. No necesita un servidor. No pegues secretos en extensiones o recetas que no revisaste.'),
+    'guide': ('Ayuda', 'Guía y límites del hardware', 'Toolbox Textual: Ctrl+F busca, flechas seleccionan, Enter/F1 leen la ayuda, Ctrl+R o el botón ejecutan; Tab cambia de panel. Esc borra la búsqueda o vuelve a Todo; Ctrl+Q sale. Mouse y scroll disponibles. Sólo redes y dispositivos propios o con permiso. No agrega Sub-GHz, RFID, emulación NFC, BadUSB ni Wi-Fi monitor/inyección: no están validados en este port.'),
+    'neighbors': ('Red', 'Vecinos ya conocidos (ARP/NDP)', 'ip neigh show: caché local; no inicia descubrimiento ARP ni un barrido de la red.'),
+    'route': ('Red', 'Trazar ruta a una IP', 'Traceroute numérico: una IP autorizada, máximo 12 saltos y una prueba por salto. Envía tráfico; requiere confirmación. No usar contra PLCs en producción.'),
+    'subnet': ('Red', 'Calcular subred (offline)', 'Ingresá IP/prefijo. Calcula red, máscara, rango y cantidad de direcciones sin enviar tráfico; no enumera todos los hosts.'),
+    'http': ('Web y TLS', 'Ver cabeceras HTTPS', 'Dominio sin URL, ruta ni credenciales. Una solicitud HEAD, sin seguir redirecciones, máximo 15 segundos; requiere confirmación. No enumera rutas ni prueba vulnerabilidades.'),
+    'pcap-info': ('Capturas offline', 'Resumen de un PCAP', 'capinfos: cantidad de paquetes, tamaño, fechas y duración de un archivo. Sin captura ni consultas de red. No modifica el original.'),
+    'pcap-read': ('Capturas offline', 'Leer primeros 100 paquetes', 'tshark -n -r archivo -c 100. Sin resolución DNS ni captura en vivo. Puede mostrar datos privados; no publiques capturas.'),
+    'filetype': ('Forense y binarios', 'Identificar un archivo', 'file: identifica formato sin ejecutar ni modificar el archivo. Analizá archivos sospechosos como usuario sin privilegios; no reemplaza un sandbox.'),
+    'elf': ('Forense y binarios', 'Cabecera ELF', 'readelf -h: arquitectura, tipo y cabecera de un ejecutable Linux. No ejecuta el binario ni carga sus bibliotecas.'),
+    'binary-info': ('Forense y binarios', 'Información binaria (Radare2)', 'rabin2 -I: información estática del archivo, sin ejecutar el programa ni abrir un debugger contra procesos.'),
+    'metadata': ('Forense y binarios', 'Leer metadatos', 'ExifTool sobre un archivo elegido, sin asignaciones ni borrado de metadatos. La salida puede contener ubicación o datos personales.'),
+    'packages': ('Auditoría local', 'Estado de paquetes y retenciones', 'dpkg --audit y apt-mark showhold. Sólo consulta; no modifica repositorios, paquetes ni retenciones del port.'),
+    'firewall': ('Auditoría local', 'Ver firewall', 'sudo nft list ruleset: sólo lee las reglas locales. No habilita servicios ni cambia la política de red.'),
+    'inventory': ('Ayuda', 'Herramientas disponibles', 'Comprueba los ejecutables del catálogo en PATH. No instala, descarga ni ejecuta auditorías. Un ejecutable presente no prueba compatibilidad del hardware.'),
+    'mqtt-explorer': ('Industrial y electrónica', 'MQTT Explorer', 'Abre la aplicación Linux para explorar un broker propio. Definí una conexión manual; no publiques comandos ni borres topics de máquinas sin conocer su efecto.'),
+    'convertall': ('Industrial y electrónica', 'ConvertAll nativo Linux', 'Conversor de unidades Linux, sin Waydroid. Versión Python 0.8.0 del repo con Qt aislado del sistema. No sirve para cálculos de seguridad reglamentaria.'),
+}
+
+# These entries deliberately open help, not an unbounded attack or a service.
+# Use the existing terminal for advanced jobs after selecting scope/options.
+GUIDES = {
+    'nmap-help': ('Red', 'Nmap · opciones avanzadas [ayuda]', 'Inventario autorizado y laboratorio: nmap --help. El menú guiado anterior usa TCP connect acotado; NSE, versiones y barridos quedan para una sesión manual con alcance acordado.', ['nmap', '--help']),
+    'arp-help': ('Red', 'ARP scan [ayuda]', 'Descubrimiento IPv4 en una LAN propia. Genera tráfico en toda la subred; no se ejecuta desde este acceso. Elegí interfaz/alcance y evitá redes industriales activas.', ['arp-scan', '--help']),
+    'mtr-help': ('Red', 'MTR / pérdida de paquetes [ayuda]', 'Para una prueba manual acotada: mtr -n -r -c 5 IP_AUTORIZADA. Este acceso sólo muestra opciones.', ['mtr', '--help']),
+    'iperf-help': ('Red', 'iperf3 / rendimiento [ayuda]', 'Necesita un servidor propio y consume ancho de banda. No arranca un servidor. Ejemplo manual: iperf3 -c IP_SERVIDOR -t 10.', ['iperf3', '--help']),
+    'ncat-help': ('Red', 'Ncat / conexiones TCP [ayuda]', 'Cliente TCP/TLS. Para probar un puerto: ncat -z -w 3 IP_AUTORIZADA PUERTO. No abre listeners ni shells desde el menú.', ['ncat', '--help']),
+    'socat-help': ('Red', 'Socat / conexiones y puentes [ayuda]', 'Puede publicar puertos o abrir dispositivos serie. Sólo ayuda: no crea puentes, listeners ni acciona hardware automáticamente.', ['socat', '-h']),
+    'whois-help': ('Red', 'WHOIS / registros de dominios [ayuda]', 'Consulta manual: whois example.com. Contacta registros externos; no es una fuente garantizada de información actual por privacidad/RDAP.', ['whois', '--help']),
+    'sslscan-help': ('Web y TLS', 'SSLScan / protocolos y cifrados [ayuda]', 'Auditoría TLS activa sobre un servicio autorizado. Puede hacer muchas conexiones: sólo ayuda, no escanea por defecto. Manual: sslscan --help.', ['sslscan', '--help']),
+    'testssl-help': ('Web y TLS', 'testssl.sh / auditoría TLS [ayuda]', 'Auditoría extensa y activa, más costosa que ver un certificado. Definí servicio y ventana de prueba; este acceso sólo muestra la ayuda.', ['testssl', '--help']),
+    'ssh-audit-help': ('Web y TLS', 'SSH audit / algoritmos [ayuda]', 'Revisa banner y negociación SSH; no necesita una contraseña. Manual acotado: ssh-audit -t 5 IP_AUTORIZADA. No ejecuta login, brute force ni cambios.', ['ssh-audit', '-h']),
+    'sqlmap-help': ('Web y TLS', 'SQLMap [ayuda · laboratorio]', 'Pruebas de inyección SQL sólo en aplicaciones propias o con autorización explícita. Este acceso no elige un destino ni extrae datos; muestra opciones para laboratorio.', ['sqlmap', '-h']),
+    'ffuf-help': ('Web y TLS', 'ffuf [ayuda · laboratorio]', 'Fuzzing HTTP activo. Elegí URL autorizada, lista pequeña, tasa y duración; no se ejecutan peticiones desde este acceso. Revisá -rate y -maxtime.', ['ffuf', '-h']),
+    'gobuster-help': ('Web y TLS', 'Gobuster [ayuda · laboratorio]', 'Enumeración web/DNS activa. No se inicia una enumeración. Acordá alcance y concurrencia antes de usarlo manualmente.', ['gobuster', '--help']),
+    'openssl-help': ('Web y TLS', 'OpenSSL / certificados [ayuda]', 'Ejemplo offline: openssl x509 -in certificado.pem -noout -subject -issuer -dates. No genera claves ni lee almacenes privados desde el menú.', ['openssl', 'help']),
+    'gnutls-help': ('Web y TLS', 'GnuTLS / cliente TLS [ayuda]', 'Cliente para comprobar TLS en un servicio propio. Sólo opciones; no se conecta ni cambia configuración.', ['gnutls-cli', '--help']),
+    'wfuzz-help': ('Web y TLS', 'Wfuzz [ayuda · laboratorio]', 'Fuzzing HTTP activo: definir alcance, tasa y duración antes de una prueba propia. Usa PycURL compatible de Droidian, sin sustituir Python/gbinder; advierte backend sin OpenSSL, por lo que TLS no está validado.', ['wfuzz', '--help']),
+    'dnsenum-help': ('Red', 'DNSenum [ayuda · laboratorio]', 'Enumeración DNS activa, potencialmente muchas consultas. Sólo muestra ayuda; usar un dominio propio y acordar la carga antes de iniciar un barrido.', ['dnsenum', '--help']),
+    'snmp-help': ('Red', 'SNMP / consultar equipos [ayuda]', 'Cliente SNMP, no instala un agente. Preferí SNMPv3 y consultas de lectura a OIDs conocidos; no escribas valores (snmpset) en equipos industriales sin control narrativo y permiso.', ['snmpget', '-h']),
+    'masscan-help': ('Red', 'Masscan [ayuda · laboratorio]', 'Escáner de alta velocidad: no lo uses en la red de planta ni sin una tasa/alcance reducidos. El menú nunca inicia barridos ni configura raw sockets.', ['masscan', '--help']),
+    'hping-help': ('Red', 'Hping3 [ayuda · laboratorio]', 'Generador de paquetes de doble uso. Sólo ayuda: no envía tráfico ni inicia floods. Las pruebas deben ser breves, de tasa baja y con permiso.', ['hping3', '--help']),
+    'iftop-help': ('Red', 'Iftop / uso de ancho de banda [ayuda]', 'Observación manual de una interfaz propia; puede requerir sudo y revelar conexiones. No inicia captura al abrir este acceso.', ['iftop', '-h']),
+    'iptraf-help': ('Red', 'IPTraf-ng / tráfico interactivo [ayuda]', 'Monitor manual para una interfaz propia. Sólo opciones; no instala un servicio ni guarda tráfico permanentemente.', ['iptraf-ng', '-h']),
+    'proxychains-help': ('Red', 'Proxychains [ayuda]', 'Usa proxies propios configurados explícitamente. No instala proxies, listeners ni modifica rutas del sistema. Este acceso no inicia conexiones.', ['proxychains4']),
+    'nc-help': ('Red', 'Netcat OpenBSD [ayuda]', 'Cliente de sockets para laboratorio. Para comprobar un puerto propio: nc -z -w 3 IP PUERTO. Este acceso no abre un listener.', ['nc', '-h']),
+    'fping-help': ('Red', 'Fping [ayuda]', 'Pruebas ICMP de alcance elegido; no inicia un barrido ni enumera direcciones. Elegí pocos destinos propios y un límite de paquetes.', ['fping', '-h']),
+    'ndiff-help': ('Red', 'Ndiff / comparar inventarios [ayuda]', 'Comparar dos resultados XML de Nmap propios: ndiff antes.xml despues.xml. No vuelve a escanear la red.', ['ndiff', '-h']),
+    'tracepath-help': ('Red', 'Tracepath / ruta y MTU [ayuda]', 'Prueba activa sobre un destino propio, no modifica MTU ni rutas. Este acceso sólo abre las opciones.', ['tracepath', '-h']),
+    'ethtool-help': ('Red', 'Ethtool / enlace Ethernet [ayuda]', 'Lectura manual: ethtool INTERFAZ. No usar opciones de escritura o autonegociación en un enlace de planta sin autorización.', ['ethtool', '-h']),
+    'units-help': ('Utilidades', 'GNU Units / unidades compuestas [ayuda]', 'Ejemplo offline: units -t "1 bar" psi. Para GUI usá ConvertAll o Qalculate. No actualiza tipos de cambio ni descarga datos desde el menú.', ['units', '--help']),
+    'qalc-help': ('Utilidades', 'Qalculate / cálculo técnico [ayuda]', 'Calculadora con unidades, constantes y álgebra. Ejemplo: qalc "1 bar to psi". No valida dimensionamiento reglamentario ni seguridad industrial.', ['qalc', '-h']),
+    'dos2unix-help': ('Utilidades', 'Dos2unix / finales de línea [ayuda]', 'Convierte textos Windows/Linux; trabaja sobre una copia o usa salida separada. No reescribe archivos automáticamente.', ['dos2unix', '-h']),
+    'shellcheck-help': ('Utilidades', 'ShellCheck / revisar scripts [ayuda]', 'shellcheck script.sh: análisis estático sin ejecutar el script. No corrige ni modifica archivos automáticamente.', ['shellcheck', '--help']),
+    'hyperfine-help': ('Utilidades', 'Hyperfine / medir programas [ayuda]', 'Ejecuta comandos repetidamente, por lo que sólo debe usarse con programas propios sin efectos destructivos. No arranca benchmarks desde el menú.', ['hyperfine', '--help']),
+    'lsof-help': ('Auditoría local', 'Lsof / archivos y sockets [ayuda]', 'lsof -i -n -P consulta sockets; sin sudo sólo puede mostrar parte de los procesos. No adjunta un debugger ni modifica conexiones.', ['lsof', '-h']),
+    'termshark-help': ('Capturas offline', 'Termshark / Wireshark en terminal [ayuda]', 'Interfaz interactiva para una copia: termshark -r captura.pcap. No inicia captura desde este acceso; usa tshark ya instalado.', ['termshark', '--help']),
+    'editcap-help': ('Capturas offline', 'Editcap / preparar capturas [ayuda]', 'Convertir o recortar un PCAP trabajando sobre una copia y una salida distinta. Nunca sobrescribas el original. Sólo muestra opciones.', ['editcap', '--help']),
+    'ngrep-help': ('Capturas offline', 'Ngrep / buscar en tráfico [ayuda]', 'Para un archivo propio: ngrep -I captura.pcap PATRON. Sin -I puede capturar en vivo: no se inicia desde el menú.', ['ngrep', '-h']),
+    'tcpflow-help': ('Capturas offline', 'TCPFlow / reconstruir flujos [ayuda]', 'Sobre una copia autorizada: tcpflow -r captura.pcap -o DIRECTORIO_NUEVO. La salida puede contener payloads privados; sólo ayuda aquí.', ['tcpflow', '-h']),
+    'netsniff-help': ('Capturas offline', 'Netsniff-ng [ayuda]', 'Captura de alto volumen y herramientas de generación de tráfico: uso manual y acotado. Este acceso no activa interfaces, replay ni generadores.', ['netsniff-ng', '--help']),
+    'radio-info': ('Wi-Fi y Bluetooth', 'Capacidades Wi-Fi declaradas', 'iw list informa capacidades declaradas; los bloqueos se consultan en la entrada rfkill. No cambia modo, potencia ni conexión. Una capacidad declarada no es una prueba de monitor/inyección.', ['iw', 'list']),
+    'aircrack-help': ('Wi-Fi y Bluetooth', 'Aircrack-ng [ayuda · hardware no validado]', 'Análisis de capturas propias/laboratorio. Monitor e inyección requieren un adaptador y driver compatibles; no están probados en eqs. No ejecuta airmon, deauth ni captura.', ['aircrack-ng', '--help']),
+    'bettercap-help': ('Wi-Fi y Bluetooth', 'Bettercap [ayuda · laboratorio]', 'Herramienta de doble uso con módulos de interceptación. Sólo ayuda: no inicia sesiones, spoofing, escaneo Bluetooth ni caplets.', ['bettercap', '-h']),
+    'bt-help': ('Wi-Fi y Bluetooth', 'BlueZ tools [ayuda]', 'Herramientas de Bluetooth del host. No iniciar bt-obex ni bt-network sin necesitar un servicio. Este acceso sólo muestra bt-adapter --help.', ['bt-adapter', '--help']),
+    'rfkill-info': ('Wi-Fi y Bluetooth', 'Estado de bloqueos de radio', 'rfkill list: sólo consulta. No desactiva Wi-Fi/Bluetooth ni modifica el emparejamiento.', ['rfkill', 'list']),
+    'binwalk-help': ('Forense y binarios', 'Binwalk / firmas de firmware [ayuda]', 'Analizá una COPIA de firmware. No usar extracción automática (-e) ni ejecutar componentes desconocidos como root. El menú muestra la ayuda, no flashea.', ['binwalk', '--help']),
+    'yara-help': ('Forense y binarios', 'YARA / reglas [ayuda]', 'Comparar una regla revisada con un archivo propio: yara REGLAS.yar ARCHIVO. Sin recorridos de todo /home, extracción de secretos ni reglas descargadas automáticamente.', ['yara', '--help']),
+    'sleuth-help': ('Forense y binarios', 'Sleuth Kit / imagen de disco [ayuda]', 'fsstat copia.img: información de filesystem sobre una imagen de laboratorio. No usar dispositivos /dev del teléfono ni modificar particiones desde este toolbox.', ['fsstat', '-V']),
+    'foremost-help': ('Forense y binarios', 'Foremost / recuperar desde una copia [ayuda]', 'Recuperación sobre una IMAGEN propia, no el disco vivo. Manual: foremost -i copia.img -o DIRECTORIO_NUEVO. Requiere espacio suficiente; aquí sólo ayuda.', ['foremost', '-h']),
+    'radare-help': ('Forense y binarios', 'Radare2 / análisis estático [ayuda]', 'Abrí una copia de un binario como usuario, sin -d (debug) ni -w (escritura). No ejecuta binarios ni analiza procesos del teléfono.', ['radare2', '-h']),
+    'hexedit-help': ('Forense y binarios', 'Hexedit / editar una copia [ayuda]', 'Editor hexadecimal: puede modificar archivos. Hacé una copia antes; este acceso sólo muestra la ayuda. Para lectura sin cambios usá Inspeccionar binario.', ['hexedit', '--help']),
+    'strace-help': ('Forense y binarios', 'Strace / llamadas de un programa [ayuda]', 'Ejemplo sobre un programa de prueba propio: strace -o traza.txt ./programa. La traza puede incluir datos sensibles. No se adjunta a PID ajenos ni servicios del port.', ['strace', '--help']),
+    'ltrace-help': ('Forense y binarios', 'Ltrace / llamadas a bibliotecas [ayuda]', 'Diagnóstico manual de un programa propio. Puede no soportar todas las ABI o binarios PIE; no se adjunta a procesos automáticamente.', ['ltrace', '--help']),
+    'gdb-help': ('Forense y binarios', 'GDB / depuración de laboratorio [ayuda]', 'Depurá sólo binarios propios; no ejecutar firmware ni attach a compositor/Android desde este acceso.', ['gdb', '--help']),
+    'lynis-help': ('Auditoría local', 'Lynis / auditoría del sistema [ayuda]', 'Auditoría manual: lynis audit system. Guardá el reporte privado; no apliques sugerencias genéricas que rompan Halium, LXC o USB. Sólo muestra ayuda aquí.', ['lynis', 'show', 'help']),
+    'debsums-help': ('Auditoría local', 'Debsums / integridad APT [ayuda]', 'Compara archivos con hashes de paquetes; parches locales pueden explicar diferencias. No instala, repara ni modifica nada desde este acceso.', ['debsums', '--help']),
+    'john-help': ('Contraseñas (laboratorio)', 'John the Ripper [ayuda · offline]', 'Auditoría OFFLINE de hashes de laboratorio propios. No lee /etc/shadow, navegadores ni almacenes de credenciales. La versión Debian estándar no equivale a Jumbo.', ['john']),
+    'hashcat-help': ('Contraseñas (laboratorio)', 'Hashcat [ayuda · backend por comprobar]', 'Auditoría offline de hashes propios. Instalación no prueba OpenCL: GPU Adreno vía libhybris no es un backend Hashcat validado. No inicia ataques ni benchmarks largos.', ['hashcat', '--help']),
+    'hydra-help': ('Contraseñas (laboratorio)', 'Hydra [ayuda · laboratorio autorizado]', 'Pruebas de autenticación activas sólo en laboratorio o con autorización y límites de bloqueo/tasa. No lee credenciales ni intenta logins desde el menú.', ['hydra', '-h']),
+    'tio-help': ('Industrial y electrónica', 'Tio / terminal serie [ayuda]', 'No abre puertos. DTR/RTS y datos pueden resetear o accionar un equipo: conocer el cableado y estado seguro antes de una conexión manual.', ['tio', '--help']),
+    'mqtt-help': ('Industrial y electrónica', 'MQTT / cliente [ayuda]', 'mosquitto_sub: suscripción manual y acotada a un broker propio. Publicaciones pueden comandar máquinas: no se conectan ni publican mensajes desde el menú.', ['mosquitto_sub', '--help']),
+    'sigrok-help': ('Industrial y electrónica', 'Sigrok / analizador lógico [ayuda]', 'Necesita un analizador compatible y límites eléctricos conocidos. Sólo ayuda, sin autodetección activa, captura ni generación de señales.', ['sigrok-cli', '--help']),
+    'dfu-help': ('Industrial y electrónica', 'DFU / firmware [ayuda]', 'Puede escribir firmware y dejar dispositivos sin arrancar. Sólo opciones, no enumera ni flashea hardware. Recuperación y autorización separadas antes de escribir.', ['dfu-util', '--help']),
+    'srecord-help': ('Industrial y electrónica', 'SRecord / formatos de firmware [ayuda]', 'Conversión offline entre Intel HEX, S-record y binario. Elegí un archivo de salida distinto. srec_info ARCHIVO -Intel describe una copia; no escribe en hardware.', ['srec_info', '-VERSion']),
+}
+TOOLS.update({key: row[:3] for key, row in GUIDES.items()})
+
+
+def run(command):
+    print('\n$ ' + shlex.join(command), flush=True)
+    result = subprocess.run(command, timeout=90,
+                            env={**os.environ, 'PATH': TOOL_PATH, 'PAGER': 'cat', 'MANPAGER': 'cat'})
+    if result.returncode not in (0, 124):
+        print(f'La herramienta terminó con código {result.returncode}.')
+    return result.returncode
+
+
+def choose(rows, title, help_key=None):
+    # Only used for the short interface prompt while Textual is suspended.
+    print('\n' + title)
+    for index, (_, label) in enumerate(rows, 1):
+        print(f'  {index}. {label}')
+    answer = input('Número (Enter cancela): ').strip()
+    if not answer:
+        return None
+    if not answer.isdecimal() or not 1 <= int(answer) <= len(rows):
+        raise ValueError('Elegí un número de la lista; no se ejecutó la captura.')
+    return rows[int(answer) - 1][0]
+
+
+def confirm(message):
+    return input(message + '\nEscribí si para continuar (Enter cancela): ').strip().lower() in ('si', 'sí')
+
+
+def target_ip():
+    return str(ipaddress.ip_address(input('IP del equipo autorizado (no rangos): ').strip()))
+
+
+def domain():
+    name = input('Dominio (sin URL): ').strip().rstrip('.')
+    if len(name) > 253 or not all(re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?', part) for part in name.split('.')):
+        raise ValueError('Dominio inválido; no se ejecutó la consulta.')
+    return name
+
+
+def input_file():
+    path = Path(input('Ruta del archivo: ').strip()).expanduser().resolve(strict=True)
+    if not path.is_file():
+        raise ValueError('No es un archivo regular.')
+    return str(path)
+
+
+def action(key):
+    if key in GUIDES:
+        run(GUIDES[key][3])
+    elif key == 'network':
+        for cmd in (['ip', '-br', 'address'], ['ip', 'route'], ['nmcli', 'device', 'status']):
+            run(cmd)
+    elif key == 'listeners':
+        run(['ss', '-lntup'])
+    elif key == 'ping':
+        run(['ping', '-c', '4', '-W', '2', target_ip()])
+    elif key == 'dns':
+        run(['dig', '+time=3', '+tries=1', domain()])
+    elif key == 'http':
+        name = domain()
+        if confirm('Consultar https://' + name + '/. ¿Tenés permiso?'):
+            run(['curl', '--head', '--connect-timeout', '5', '--max-time', '15', '--proto', '=https', '--url', 'https://' + name + '/'])
+    elif key == 'neighbors':
+        run(['ip', 'neigh', 'show'])
+    elif key == 'route':
+        ip = target_ip()
+        if confirm('Trazar ruta a ' + ip + ', máximo 12 saltos. ¿Tenés permiso?'):
+            run(['traceroute', '-6' if ':' in ip else '-4', '-n', '-q', '1', '-m', '12', '-w', '1', ip])
+    elif key == 'subnet':
+        net = ipaddress.ip_network(input('IP/prefijo: ').strip(), strict=False)
+        print(f'Red: {net}\nMáscara: {net.netmask}\nRango completo: {net.network_address} – {net.broadcast_address}\nDirecciones totales (no hosts utilizables): {net.num_addresses}')
+    elif key == 'ports':
+        ip = target_ip()
+        if confirm('Destino: ' + ip + '. Confirmá que tenés permiso y que es seguro escanearlo.'):
+            command = ['nmap', '-sT', '-Pn', '--top-ports', '100', '--max-retries', '1', '--host-timeout', '30s', ip]
+            if ':' in ip:
+                command.insert(1, '-6')
+            run(command)
+    elif key == 'capture':
+        iface = choose([(name, name) for _, name in socket.if_nameindex()], 'Interfaz', 'capture')
+        if not iface or iface not in dict((name, index) for index, name in socket.if_nameindex()):
+            return
+        if confirm('Capturar tráfico de ' + iface + ' durante hasta 60 s. Puede contener datos privados. ¿Tenés permiso?'):
+            folder = Path.home() / 'Documents/EQS-Capturas'
+            folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+            folder.chmod(0o700)  # mkdir's mode does not protect an existing directory.
+            fd, path = tempfile.mkstemp(prefix='eqs-', suffix='.pcap', dir=folder)
+            os.close(fd)
+            status = run(['sudo', 'timeout', '60', 'tcpdump', '-i', iface, '-nn', '-s', '128', '-c', '200', '-Z', getpass.getuser(), '-w', path])
+            if status not in (0, 124):
+                print('La captura falló; el archivo puede estar vacío o incompleto: ' + path)
+                return
+            print('Captura: ' + path + '\nVerla: tcpdump -nn -r ' + shlex.quote(path))
+    elif key == 'wifi':
+        run(['nmcli', 'device', 'wifi', 'list', '--rescan', 'no'])
+    elif key == 'bluetooth':
+        run(['bluetoothctl', 'show'])
+        run(['bluetoothctl', 'devices', 'Paired'])
+    elif key == 'usb':
+        run(['lsusb'])
+        run(['lsusb', '-t'])
+        print('\nPuertos serie:')
+        print('\n'.join(map(str, Path('/dev/serial/by-id').glob('*'))) or 'Sin puertos serie identificados.')
+    elif key in ('hash', 'hex', 'pcap-info', 'pcap-read', 'filetype', 'elf', 'binary-info', 'metadata'):
+        path = input_file()
+        commands = {
+            'hash': ['sha256sum', '--'], 'hex': ['od', '-Ax', '-tx1z', '-N', '4096', '--'],
+            'pcap-info': ['capinfos', '-c', '-s', '-a', '-e', '-u'],
+            'pcap-read': ['tshark', '-n', '-c', '100', '-r'],
+            'filetype': ['file', '--'], 'elf': ['readelf', '-h', '--'],
+            'binary-info': ['rabin2', '-I'], 'metadata': ['exiftool'],
+        }
+        run(commands[key] + [path])
+    elif key == 'packages':
+        run(['dpkg', '--audit'])
+        run(['apt-mark', 'showhold'])
+    elif key == 'firewall':
+        run(['sudo', 'nft', 'list', 'ruleset'])
+    elif key == 'inventory':
+        programs = sorted({row[3][0] for row in GUIDES.values()} | {'ip', 'ss', 'ping', 'dig', 'tcpdump', 'curl', 'capinfos', 'tshark', 'file', 'readelf', 'rabin2', 'exiftool', 'nft', 'traceroute'})
+        for program in programs:
+            print(program + ': ' + (shutil.which(program, path=TOOL_PATH) or 'NO INSTALADO / fuera de PATH'))
+    elif key in ('cyberchef', 'mqtt-explorer', 'convertall'):
+        desktops = {'cyberchef': 'uk.gov.gchq.CyberChef.desktop', 'mqtt-explorer': 'mqtt-explorer.desktop', 'convertall': 'convertall.desktop'}
+        launcher = Path.home() / '.local/share/applications' / desktops[key]
+        run(['gio', 'launch', str(launcher)])
+    elif key == 'guide':
+        print(TOOLS[key][2])
+    else:
+        raise ValueError('Herramienta desconocida.')
+
+
+def main():
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '--help' and len(sys.argv) == 2:
+            print(TOOLS['guide'][2])
+            return 0
+        if len(sys.argv) == 3 and sys.argv[1] == '--help' and sys.argv[2] in TOOLS:
+            _, label, help_text = TOOLS[sys.argv[2]]
+            print(label + '\n\n' + help_text)
+            return 0
+        print('Uso: eqs-hacking [--help [herramienta]]', file=sys.stderr)
+        return 2
+    if not sys.stdout.isatty():
+        print('Abrí EQS Hacking Toolbox desde Plasma o una terminal.', file=sys.stderr)
+        return 2
+    try:
+        from eqs_hacking_ui import ToolboxApp
+    except ImportError:
+        print('Falta la interfaz Textual. Instalá python3-textual y eqs_hacking_ui.py junto a eqs-hacking. Ver port/shell/TOOLBOX.md.', file=sys.stderr)
+        return 2
+    try:
+        ToolboxApp(TOOLS, GUIDES, action).run()
+    except (KeyboardInterrupt, EOFError):
+        pass
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

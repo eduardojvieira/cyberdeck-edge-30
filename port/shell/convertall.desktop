@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=ConvertAll
+Comment=Conversor de unidades nativo Linux
+Exec=/home/droidian/.local/bin/convertall
+TryExec=/home/droidian/.local/bin/convertall
+Icon=/home/droidian/.local/opt/convertall-0.8.0/usr/share/convertall/icons/convertall-icon.svg
+Terminal=false
+Categories=Education;Math;
+Keywords=unidades;convertir;conversion;units;
+StartupNotify=true

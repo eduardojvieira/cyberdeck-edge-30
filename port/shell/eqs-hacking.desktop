@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=EQS Hacking Toolbox
+Comment=Redes, TLS, capturas, binarios, auditoría y utilidades con ayuda
+Exec=/home/droidian/.local/bin/ghostty --gtk-single-instance=false -e /home/droidian/.local/bin/eqs-hacking
+TryExec=/home/droidian/.local/bin/eqs-hacking
+Icon=utilities-terminal
+Terminal=false
+Categories=Network;
+Keywords=seguridad;hacking;auditoria;nmap;tcpdump;bluetooth;wifi;usb;tls;forense;mqtt;
+DBusActivatable=false
+StartupNotify=true

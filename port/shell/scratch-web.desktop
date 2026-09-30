@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Scratch (web oficial)
+Comment=Editor oficial de Scratch 3; requiere conexión a Internet
+Exec=/usr/bin/chromium --app=https://scratch.mit.edu/projects/editor/
+TryExec=/usr/bin/chromium
+Icon=applications-education
+Terminal=false
+Categories=Education;
+Keywords=scratch;bloques;programacion;
+StartupNotify=true

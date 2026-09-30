@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=EQS Electrónica
+Name[en]=EQS Electronics
+Name[pt_BR]=EQS Eletrônica
+Comment=Circuitos, señales, registros, HMI y guías de instrumentación
+Exec=/home/droidian/.local/bin/ghostty --gtk-single-instance=false -e /home/droidian/.local/bin/eqs-field-toolbox electronics
+TryExec=/home/droidian/.local/bin/eqs-field-toolbox
+Icon=applications-electronics
+Terminal=false
+Categories=Science;Electronics;
+Keywords=electronica;ohm;led;rc;pwm;rgb565;endian;spice;sigrok;serie;toolbox;
+DBusActivatable=false
+StartupNotify=true

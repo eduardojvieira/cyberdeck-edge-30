@@ -1,0 +1,5 @@
+#!/bin/sh
+# Keep Electron's desktop renderer separate from the phone's HWC/Qt stack.
+export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+export LIBGL_ALWAYS_SOFTWARE=1
+exec /usr/bin/mqtt-explorer --ozone-platform=x11 --disable-gpu "$@"

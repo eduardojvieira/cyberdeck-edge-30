@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=MQTT Explorer
+Comment=Explorar topics y mensajes de un broker MQTT propio
+Exec=/home/droidian/.local/bin/mqtt-explorer
+TryExec=/usr/bin/mqtt-explorer
+Icon=mqtt-explorer
+Terminal=false
+Categories=Network;
+Keywords=mqtt;broker;topics;iot;
+StartupNotify=true

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=TurboWarp (Scratch offline)
+Comment=Editor offline compatible con Scratch; no es la aplicación oficial
+Exec=/usr/bin/env __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json LIBGL_ALWAYS_SOFTWARE=1 /opt/TurboWarp/turbowarp-desktop --ozone-platform=x11 --ignore-gpu-blocklist %U
+TryExec=/opt/TurboWarp/turbowarp-desktop
+Icon=turbowarp-desktop
+Terminal=false
+Categories=Development;
+Keywords=scratch;bloques;programacion;
+MimeType=application/x.scratch.sb3;application/x.scratch.sb2;application/x.scratch.sb;
+StartupWMClass=turbowarp-desktop
+DBusActivatable=false

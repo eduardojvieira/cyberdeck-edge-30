@@ -1,0 +1,285 @@
+#!/usr/bin/env python3
+"""Offline field calculators and explicit app/help actions; no hardware control."""
+import argparse
+from decimal import Decimal, InvalidOperation
+import math
+import os
+from pathlib import Path
+import re
+import shlex
+import shutil
+import statistics
+import struct
+import subprocess
+import sys
+
+TOOL_PATH = str(Path.home() / '.local/bin') + ':' + os.environ.get('PATH', os.defpath) + ':/usr/sbin:/sbin'
+BOUNDARY = 'Cálculos orientativos: verificá unidades, modelo y tolerancias.\nSin conexiones, capturas ni escrituras automáticas en equipos.'
+HELP = ('Ctrl+F busca; flechas, mouse y scroll seleccionan; Enter/F1 leen ayuda. '
+        'Ctrl+R o el botón ejecutan; Ctrl+C cancela una entrada; Enter vuelve al menú. '
+        'Se acepta coma decimal o notación científica, sin separador de miles. '
+        'Los resultados son modelos ideales, no mediciones ni diseños de seguridad. '
+        'No dimensionar estructuras, instalaciones reglamentarias ni funciones de protección con estas cuentas. '
+        'Los accesos de instrumentación sólo muestran ayuda: no abren puertos, flashean ni accionan hardware.')
+
+# Descriptions are also the searchable, offline documentation shown before execution.
+CALCS = {
+    'ohm': ('Circuitos', 'Ley de Ohm y potencia', 'Ingresá tensión [V] y resistencia [Ω]. I = V/R; P = V·I. Resistencia ideal positiva; no incluye tolerancia ni temperatura.'),
+    'divider': ('Circuitos', 'Divisor resistivo', 'Vin [V], R1 arriba y R2 a masa [Ω]. Vout = Vin·R2/(R1+R2). Muestra corriente y disipación. SIN carga: una entrada de baja impedancia cambia el resultado.'),
+    'led': ('Circuitos', 'Resistencia para LED', 'Fuente y caída del LED [V], corriente [mA]. R = (Vs−Vf)/I; P = (Vs−Vf)·I. Un solo LED y corriente nominal: verificá Vf, tolerancias, potencia y margen térmico antes de elegir un componente.'),
+    'rc': ('Señales', 'RC: constante de tiempo y corte', 'R [Ω] y C [nF]. τ = RC; fc = 1/(2πRC). Un polo ideal sin carga; no incluye impedancia de fuente, polos extra ni tolerancias.'),
+    'pwm': ('Señales', 'Frecuencia, período y PWM', 'Frecuencia [Hz] y ciclo útil [%]. T = 1/f; ton = T·duty/100. No configura timers ni genera señales; la frecuencia real depende del reloj y su calibración.'),
+    'registers': ('Datos y HMI', 'Registros: UINT / INT / REAL y endian', 'Cuatro bytes hex, por ejemplo 3F 80 00 00. Muestra binario y UINT32, INT32 y FLOAT32 IEEE-754 para ABCD, DCBA, CDAB y BADC. Verificá orden de bytes/palabras en el manual del PLC; no lee ni escribe registros.'),
+    'rgb': ('Datos y HMI', 'RGB, HEX y RGB565', 'Tres canales enteros 0–255. RGB565 = (R>>3)<<11 | (G>>2)<<5 | (B>>3). Cuantiza a 5/6/5 bits; no configura el display ni supone un orden de bytes del controlador.'),
+    'framebuffer': ('Datos y HMI', 'Memoria de framebuffer', 'Ancho, alto, bits por píxel y buffers. bytes/fila = ceil(ancho·bpp/8). Memoria = bytes/fila·alto·buffers. Cada fila alineada a UN byte; DMA/stride, compresión, texturas y metadatos pueden requerir más memoria.'),
+    'scaling': ('Instrumentación', 'Escalado 4–20 mA / 0–10 V / cuentas', 'Valor leído y extremos de origen; extremos de ingeniería en la MISMA unidad (UE). y = y0+(x−x0)·(y1−y0)/(x1−x0). Acepta escala inversa, avisa fuera de rango y NO recorta. No diagnostica NAMUR/falla del sensor ni cambia el PLC.'),
+    'dosing': ('Dosificación', 'Pulsos, volumen, masa y tolerancia', 'Pulsos contados, calibración [pulsos/L], objetivo [L], densidad [kg/L] y tolerancia [%]. V = pulsos/calibración; m = V·densidad. El error es respecto del objetivo; la calibración y densidad reales las cargás vos.'),
+    'repeatability': ('Dosificación', 'Repetibilidad de una prueba', '2–100 medidas en la MISMA unidad (UE), separadas por punto y coma. Muestra media, mínimo, máximo y desvío estándar MUESTRAL (n−1). CV = 100·s/|media|. Dispersión no es exactitud: requiere patrón y condiciones de ensayo.'),
+    'motion': ('Movimiento', 'Reducción, husillo y pulsos/mm', 'rpm del motor; reducción = vueltas motor por vuelta salida; avance [mm/vuelta salida]; cuentas efectivas por vuelta MOTOR (incluí cuadratura si corresponde). rpm salida = rpm motor/reducción; v = rpm salida·avance/60; cuentas/mm = cuentas·reducción/avance. Sin backlash, deslizamiento ni límites dinámicos.'),
+    'torque': ('Movimiento', 'Potencia mecánica y torque', 'Potencia mecánica EN EL EJE [kW] y velocidad [rpm]. T = P·60000/(2π·rpm). No es potencia eléctrica ni selección de motor: no considera eficiencia, arranque, servicio ni seguridad.'),
+    'geometry': ('Geometría', 'Superficie, volumen y desperdicio', 'Largo, ancho y espesor [m]; desperdicio [%]. A = largo·ancho; V = A·espesor; estimación = base·(1+desperdicio/100). Sólo geometría y cantidad orientativa; no calcula resistencia estructural ni rendimientos de material.'),
+}
+APPS = {
+    'qalculate': ('Unidades', 'Qalculate! Qt', 'Calculadora de unidades, expresiones y funciones. Para otras unidades usá esta aplicación, no conviertas mentalmente las entradas de las calculadoras.', 'io.github.Qalculate.qalculate-qt.desktop'),
+    'convertall': ('Unidades', 'ConvertAll nativo Linux', 'Conversión de unidades en el runtime Qt aislado existente; no usa Waydroid.', 'convertall.desktop'),
+    'okteta': ('Datos y HMI', 'Okteta · archivos binarios', 'Visor/editor hexadecimal. Abrí una COPIA: permite modificar archivos; no es un sandbox para archivos desconocidos.', 'org.kde.okteta.desktop'),
+    'geany': ('Programación', 'Geany · C listo para ejecutar', 'C con GCC configurado: guardá un .c y F5 compila/ejecuta. Usá sólo tu programa de prueba, sin abrir dispositivos ni controlar equipos desde el ejemplo.', 'geany.desktop'),
+    'octave': ('Ciencia', 'GNU Octave', 'Cálculo numérico, matrices, señales y gráficos. Conserva el launcher de Homebrew y su aislamiento gráfico existente.', 'org.octave.Octave.desktop'),
+    'scilab': ('Ciencia', 'Scilab', 'Modelado numérico y análisis con la compilación ARM64 ya instalada. Las simulaciones no validan comportamiento físico por sí solas.', 'scilab.desktop'),
+    'maxima': ('Ciencia', 'wxMaxima', 'Álgebra simbólica, ecuaciones, derivadas e integrales; conserva el backend Maxima del launcher existente.', 'io.github.wxmaxima_developers.wxMaxima.desktop'),
+    'spyder': ('Ciencia', 'Spyder · Python científico', 'NumPy, SciPy, SymPy, pandas y Matplotlib en el entorno science aislado. No reemplaza Python ni Qt del teléfono.', 'spyder.desktop'),
+    'labplot': ('Datos', 'LabPlot · señales y curvas', 'Gráficos, ajustes y análisis de capturas propias. Usa el Flatpak instalado; no inicia adquisición de datos.', 'org.kde.labplot.desktop'),
+    'sqlite': ('Datos', 'DB Browser for SQLite', 'Inspeccionar bases de pruebas locales. Hacé una copia antes de editar; no abre bases automáticamente.', 'org.sqlitebrowser.sqlitebrowser.desktop'),
+    'meld': ('Datos', 'Meld · comparar archivos', 'Comparar exportaciones/configuraciones y combinar cambios. Revisá los cambios antes de sobrescribir originales.', 'org.gnome.meld.desktop'),
+    'mqtt': ('Protocolos', 'MQTT Explorer', 'Abre la app existente. Elegí deliberadamente tu broker; publicar o borrar topics puede comandar máquinas. El toolbox no selecciona destinos ni envía mensajes.', 'mqtt-explorer.desktop'),
+}
+GUIDES = {
+    'ngspice': ('Simulación', 'Ngspice [ayuda]', 'Simulador SPICE instalado. Ejemplo manual OFFLINE: ngspice -b circuito.cir. Revisá modelos y salida; el acceso sólo muestra opciones, no ejecuta un netlist.', ['ngspice', '--help']),
+    'sigrok': ('Instrumentación', 'Sigrok / decodificadores [ayuda]', 'Analizador lógico compatible y límites eléctricos a verificar. Sólo opciones; sin escaneo activo ni adquisición. Una captura requiere elegir driver, canales, frecuencia y duración.', ['sigrok-cli', '--help']),
+    'pulseview': ('Instrumentación', 'PulseView [ayuda]', 'Interfaz de Sigrok: captura o lectura manual de señales. Este acceso NO abre la GUI ni inicia detección de dispositivos. Validar tensiones y masa antes de una conexión física.', ['pulseview', '--help']),
+    'tio': ('Instrumentación', 'Tio / terminal serie [ayuda]', 'No abre /dev ni configura DTR/RTS. Abrir una conexión serie puede resetear o accionar hardware: primero conocer cableado y estado seguro.', ['tio', '--help']),
+    'srecord': ('Firmware offline', 'SRecord / HEX y binarios [ayuda]', 'Conversión manual sobre COPIAS: srec_info firmware.hex -Intel; srec_cat entrada.hex -Intel -o salida.bin -Binary. Nunca elegir /dev como salida. Aquí sólo versión y guía; sin flash.', ['srec_info', '-VERSion']),
+    'gcc': ('Programación', 'GCC / compilador C [ayuda]', 'Ejemplo manual: gcc -std=c17 -Wall -Wextra -Wpedantic -g prueba.c -lm -o prueba. No compila ni ejecuta código automáticamente.', ['gcc', '--help']),
+    'qalc-help': ('Unidades', 'Qalculate! en terminal [ayuda]', 'Ejemplo offline: qalc "2 bar to psi". Expresiones y unidades generales, sin otro servicio ni una nueva base de unidades.', ['qalc', '--help']),
+    'units': ('Unidades', 'GNU Units [ayuda]', 'Ejemplo manual offline: units "25 mm" "inch". Verificá las dimensiones; no asumir equivalencia entre masa y volumen sin densidad.', ['units', '--help']),
+    'visidata': ('Datos', 'VisiData / CSV [ayuda]', 'Explorar una copia: vd mediciones.csv. Aquí sólo ayuda; no carga archivos privados ni conecta fuentes.', ['vd', '--help']),
+    'miller': ('Datos', 'Miller / transformar CSV [ayuda]', 'Ejemplo manual offline: mlr --icsv --ojson cat mediciones.csv. Trabajá sobre copias y usá una salida distinta del original.', ['mlr', '--help']),
+    'gnuplot': ('Datos', 'Gnuplot [ayuda]', 'Graficar manualmente datos de pruebas. Las unidades, escalas y ejes son parte del resultado; no abre archivos ni ejecuta scripts al entrar.', ['gnuplot', '--help']),
+    'mosquitto': ('Protocolos', 'MQTT / cliente de terminal [ayuda]', 'Sólo opciones: no conecta ni publica. Una suscripción manual debe tener broker propio, topics elegidos y duración límite. No publicar comandos de máquina para probar.', ['mosquitto_sub', '--help']),
+    'science-python': ('Ciencia', 'Python científico / consola [ayuda]', 'science-python abre el entorno NumPy/SciPy/SymPy/pandas existente. Aquí sólo opciones de Python; no instala paquetes ni inicia notebooks.', ['science-python', '--help']),
+    'sage': ('Ciencia', 'SageMath [ayuda]', 'SageMath en el entorno science existente. Ejemplo manual: sage para álgebra/números; aquí sólo ayuda, no abre un servidor Jupyter.', ['sage', '--help']),
+}
+TOOLS = {key: row[:3] for source in (CALCS, APPS, GUIDES) for key, row in source.items()}
+TOOLS['guide'] = ('Ayuda', 'Controles, unidades y límites', HELP)
+COMMON = ('qalculate', 'convertall', 'qalc-help', 'units', 'guide')
+PROFILES = {
+    'electronics': ('EQS Electrónica', ('ohm', 'divider', 'led', 'rc', 'pwm', 'registers', 'rgb', 'framebuffer', 'ngspice', 'sigrok', 'pulseview', 'tio', 'srecord', 'okteta', 'geany', 'gcc') + COMMON),
+    'engineering': ('EQS Ingeniería', ('scaling', 'dosing', 'repeatability', 'motion', 'torque', 'geometry', 'octave', 'scilab', 'maxima', 'spyder', 'labplot', 'sqlite', 'meld', 'mqtt', 'visidata', 'miller', 'gnuplot', 'mosquitto', 'science-python', 'sage') + COMMON),
+}
+
+
+def number(raw, *, low=None, high=None, positive=False, integer=False):
+    if len(raw) > 64:
+        raise ValueError('Número demasiado largo (máximo 64 caracteres).')
+    try:
+        exact = Decimal(raw.strip().replace(',', '.'))
+    except InvalidOperation:
+        raise ValueError('Ingresá un número, con coma o punto decimal y sin separador de miles.') from None
+    if not exact.is_finite() or exact.copy_abs() > Decimal('1e100'):
+        raise ValueError('Ingresá un número finito de magnitud no mayor que 1e100.')
+    if positive and exact <= 0:
+        raise ValueError('El valor debe ser mayor que cero.')
+    if (low is not None and exact < low) or (high is not None and exact > high):
+        raise ValueError(f'Valor fuera del intervalo permitido: {low} … {high}.')
+    if integer:
+        if exact != exact.to_integral_value() or exact.copy_abs() > 2**53 - 1:
+            raise ValueError('Ingresá un entero exacto de magnitud no mayor que 2^53−1.')
+        return int(exact)
+    value = float(exact)
+    if value == 0 and exact != 0:
+        raise ValueError('Magnitud demasiado pequeña para la precisión numérica.')
+    return value
+
+
+def calculate(key):
+    readings = []
+
+    def read(label, **bounds):
+        raw = input(label + ' (Enter cancela): ').strip()
+        if not raw:
+            raise EOFError
+        value = number(raw, **bounds)
+        readings.append(f'{label}: {raw}')
+        return value
+
+    formula, warning = CALCS[key][2], ''
+    try:
+        if key == 'ohm':
+            v, r = read('Tensión [V]'), read('Resistencia [Ω]', positive=True)
+            result = {'Corriente [A]': v / r, 'Potencia [W]': v * (v / r)}
+        elif key == 'divider':
+            v, r1, r2 = read('Vin [V]'), read('R1 [Ω]', positive=True), read('R2 [Ω]', positive=True)
+            i = v / (r1 + r2)
+            result = {'Vout sin carga [V]': i * r2, 'Corriente [A]': i, 'P R1 [W]': i * i * r1, 'P R2 [W]': i * i * r2}
+        elif key == 'led':
+            vs, vf, current = read('Fuente [V]', positive=True), read('Vf [V]', positive=True), read('Corriente [mA]', positive=True) / 1000
+            if vs <= vf:
+                raise ValueError('La fuente debe superar Vf para este modelo de LED con resistencia.')
+            result = {'Resistencia teórica [Ω]': (vs - vf) / current, 'Disipación nominal [W]': (vs - vf) * current}
+        elif key == 'rc':
+            r, c = read('R [Ω]', positive=True), read('C [nF]', positive=True) * 1e-9
+            tau = r * c
+            result = {'Constante de tiempo [s]': tau, 'Corte [Hz]': 1 / (2 * math.pi * tau)}
+        elif key == 'pwm':
+            f, duty = read('Frecuencia [Hz]', positive=True), read('Duty [%]', low=0, high=100)
+            result = {'Período [s]': 1 / f, 'Tiempo alto [s]': duty / 100 / f, 'Tiempo bajo [s]': (1 - duty / 100) / f}
+        elif key == 'registers':
+            raw = input('Cuatro bytes hex (ej. 3F 80 00 00; Enter cancela): ').strip()
+            if not raw:
+                raise EOFError
+            compact = raw.replace(' ', '')
+            if not re.fullmatch(r'[0-9a-fA-F]{8}', compact):
+                raise ValueError('Se necesitan exactamente cuatro bytes hexadecimales.')
+            data = bytes.fromhex(compact)
+            readings.append('Bytes en orden de entrada: ' + data.hex(' ').upper())
+            result = {'Binario ABCD': f'{int.from_bytes(data, "big"):032b}'}
+            for label, b in [('ABCD', data), ('DCBA', data[::-1]), ('CDAB', data[2:] + data[:2]), ('BADC', bytes((data[1], data[0], data[3], data[2])))]:
+                f = struct.unpack('>f', b)[0]
+                result[label] = f'UINT32={int.from_bytes(b, "big")}; INT32={int.from_bytes(b, "big", signed=True)}; FLOAT32={f!r}'
+                if not math.isfinite(f):
+                    warning = 'IEEE-754 contiene NaN/Inf: no es un valor de ingeniería válido. Verificá tipo y endian.'
+        elif key == 'rgb':
+            r, g, b = [read(c + ' [0–255]', low=0, high=255, integer=True) for c in ('R', 'G', 'B')]
+            rgb565 = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
+            result = {'HEX RGB': f'#{r:02X}{g:02X}{b:02X}', 'RGB565': f'0x{rgb565:04X}', 'RGB565 decimal': rgb565}
+        elif key == 'framebuffer':
+            w, h = read('Ancho [px]', low=1, high=65536, integer=True), read('Alto [px]', low=1, high=65536, integer=True)
+            bpp, buffers = read('Bits por píxel [1/8/16/24/32]', integer=True), read('Buffers', low=1, high=64, integer=True)
+            if bpp not in (1, 8, 16, 24, 32):
+                raise ValueError('Usá 1, 8, 16, 24 o 32 bits por píxel.')
+            row = (w * bpp + 7) // 8
+            total = row * h * buffers
+            result = {'Bytes por fila': row, 'Bytes totales': total, 'MiB mínimos': total / 2**20}
+        elif key == 'scaling':
+            x, x0, x1 = read('Valor leído [unidad origen]'), read('Origen inicio'), read('Origen fin')
+            y0, y1 = read('Ingeniería inicio [UE]'), read('Ingeniería fin [UE]')
+            if x0 == x1:
+                raise ValueError('Los extremos de origen deben ser distintos.')
+            fraction = (x - x0) / (x1 - x0)
+            result = {'Valor [UE]': y0 + fraction * (y1 - y0), 'Posición del rango [%]': fraction * 100}
+            warning = 'FUERA DE RANGO: resultado extrapolado, sin recortar.' if not 0 <= fraction <= 1 else 'Dentro del rango; esto NO prueba que el sensor esté sano.'
+        elif key == 'dosing':
+            pulses, calibration = read('Pulsos', low=0, integer=True), read('Calibración [pulsos/L]', positive=True)
+            target, density, tolerance = read('Objetivo [L]', positive=True), read('Densidad [kg/L]', positive=True), read('Tolerancia [%]', low=0, high=100)
+            volume = pulses / calibration
+            error = 100 * (volume - target) / target
+            result = {'Volumen [L]': volume, 'Masa [kg]': volume * density, 'Error [L]': volume - target, 'Error [%]': error}
+            # Inclusive boundary: account only for floating-point rounding, not sensor uncertainty.
+            within = abs(error) <= tolerance or math.isclose(abs(error), tolerance, rel_tol=1e-12, abs_tol=0)
+            warning = 'Dentro de la tolerancia ingresada.' if within else 'FUERA de la tolerancia ingresada.'
+        elif key == 'repeatability':
+            raw = input('Medidas [UE] separadas por ; (Enter cancela): ').strip()
+            if not raw:
+                raise EOFError
+            if len(raw) > 6500 or not 2 <= len(raw.split(';')) <= 100:
+                raise ValueError('Ingresá entre 2 y 100 medidas separadas por punto y coma.')
+            values = [number(s) for s in raw.split(';')]
+            readings.append('Medidas [UE]: ' + raw)
+            mean, s = statistics.mean(values), statistics.stdev(values)
+            result = {'Cantidad': len(values), 'Media [UE]': mean, 'Mínimo [UE]': min(values), 'Máximo [UE]': max(values), 'Desvío muestral [UE]': s}
+            if mean:
+                result['CV [%]'] = 100 * s / abs(mean)
+            else:
+                warning = 'CV no definido: media cero.'
+        elif key == 'motion':
+            rpm, ratio = read('rpm MOTOR'), read('Reducción [vueltas motor/vuelta salida]', positive=True)
+            lead, counts = read('Avance [mm/vuelta salida]', positive=True), read('Cuentas/vuelta MOTOR', low=1, integer=True)
+            result = {'rpm salida': rpm / ratio, 'Velocidad [mm/s]': rpm / ratio * lead / 60, 'Cuentas/mm': counts * ratio / lead}
+        elif key == 'torque':
+            power, rpm = read('Potencia mecánica en eje [kW]', low=0), read('Velocidad [rpm]', positive=True)
+            result = {'Torque ideal [N·m]': power * 60000 / (2 * math.pi * rpm)}
+        elif key == 'geometry':
+            length, width, depth = [read(s + ' [m]', positive=True) for s in ('Largo', 'Ancho', 'Espesor')]
+            factor = 1 + read('Desperdicio [%]', low=0, high=100) / 100
+            area, volume = length * width, length * width * depth
+            result = {'Superficie [m²]': area, 'Volumen [m³]': volume, 'Superficie estimada [m²]': area * factor, 'Volumen estimado [m³]': volume * factor}
+        else:
+            raise ValueError('Calculadora desconocida.')
+    except ArithmeticError:
+        raise ValueError('La operación excede la precisión numérica. Revisá magnitudes y unidades.') from None
+    if any(not math.isfinite(v) for v in result.values() if isinstance(v, (int, float))):
+        raise ValueError('Resultado fuera de la precisión numérica. Revisá magnitudes y unidades.')
+    lines = [v if isinstance(v, str) else (str(v) if isinstance(v, int) else f'{v:.10g}') for v in result.values()]
+    return '\n'.join(['Entradas:', *readings, '\nModelo: ' + formula, '\nResultados:',
+                      *(f'{name}: {v}' for name, v in zip(result, lines)), warning])
+
+
+def desktop_path(app_id):
+    home = Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local/share')))
+    dirs = [home, *(Path(p) for p in os.environ.get('XDG_DATA_DIRS', '/usr/local/share:/usr/share').split(':') if p),
+            home / 'flatpak/exports/share', Path('/var/lib/flatpak/exports/share')]
+    return next((d / 'applications' / app_id for d in dirs if (d / 'applications' / app_id).is_file()), None)
+
+
+def available(key):
+    if key in APPS:
+        return desktop_path(APPS[key][3]) is not None and shutil.which('gio', path=TOOL_PATH) is not None
+    if key in GUIDES:
+        return shutil.which(GUIDES[key][3][0], path=TOOL_PATH) is not None
+    return key in CALCS or key == 'guide'
+
+
+def action(key):
+    if key in CALCS:
+        print(calculate(key))
+        return
+    if key == 'guide':
+        print(HELP)
+        return
+    if not available(key):
+        raise ValueError('Falta el programa o su launcher; no se instala automáticamente.')
+    if key in GUIDES:
+        argv = GUIDES[key][3]
+    elif key in APPS:
+        argv = ['gio', 'launch', str(desktop_path(APPS[key][3]))]
+    else:
+        raise ValueError('Herramienta desconocida.')
+    print('$ ' + shlex.join(argv), flush=True)
+    env = {**os.environ, 'PATH': TOOL_PATH, 'PAGER': 'cat', 'MANPAGER': 'cat'}
+    if key in GUIDES:
+        env['QT_QPA_PLATFORM'] = 'offscreen'  # Qt option help must not need or open a display.
+    result = subprocess.run(argv, timeout=30, env=env)
+    if result.returncode:
+        print(f'El programa terminó con código {result.returncode}.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description='EQS Electrónica / Ingeniería: cálculos offline, aplicaciones y ayuda.')
+    parser.add_argument('profile', choices=PROFILES)
+    parser.add_argument('--list', action='store_true', help='Mostrar catálogo sin ejecutar herramientas.')
+    args = parser.parse_args()
+    title, keys = PROFILES[args.profile]
+    tools = {k: TOOLS[k] for k in keys}
+    if args.list:
+        print(title)
+        for k, (category, label, _) in tools.items():
+            print(f'{k}\t{category}\t{label}')
+        return 0
+    if not sys.stdout.isatty():
+        print('Abrí el toolbox desde Plasma o una terminal.', file=sys.stderr)
+        return 2
+    try:
+        from eqs_hacking_ui import ToolboxApp
+    except ImportError:
+        print('Falta Textual o eqs_hacking_ui.py; ver port/shell/TOOLBOX.md.', file=sys.stderr)
+        return 2
+    modes = {k: ('OFFLINE', 'green') if k in CALCS else ('APP', 'green') if k in APPS else ('AYUDA', 'cyan') for k in keys}
+    try:
+        ToolboxApp(tools, GUIDES, action, title=title, boundary=BOUNDARY, modes=modes, available=available).run()
+    except (KeyboardInterrupt, EOFError):
+        pass
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

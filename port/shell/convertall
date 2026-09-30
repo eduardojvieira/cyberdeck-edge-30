@@ -1,0 +1,7 @@
+#!/bin/sh
+# Debian's pure-Python app, isolated with the existing science PyQt5 runtime.
+# Resource paths in the extracted package must point to this user prefix.
+unset LD_PRELOAD QT_PLUGIN_PATH QML2_IMPORT_PATH QT_QPA_PLATFORMTHEME
+export QT_QPA_PLATFORM=xcb
+exec "$HOME/.local/opt/miniforge3/bin/conda" run --no-capture-output -n science python \
+    "$HOME/.local/opt/convertall-0.8.0/usr/share/convertall/convertall.py" "$@"
