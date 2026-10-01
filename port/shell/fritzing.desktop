@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Fritzing
+Comment=Circuitos en protoboard, esquemas y PCB
+Exec=/home/droidian/.local/bin/fritzing %f
+TryExec=/usr/bin/fritzing
+Icon=fritzing
+Terminal=false
+Categories=Science;Electronics;Engineering;
+Keywords=protoboard;PCB;breadboard;Arduino;circuitos;
+StartupNotify=true

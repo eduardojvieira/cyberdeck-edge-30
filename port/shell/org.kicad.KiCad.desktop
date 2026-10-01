@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=KiCad
+Comment=Diseño de esquemas y PCB (renderizado por software)
+Exec=/home/droidian/.local/bin/kicad %f
+TryExec=/usr/bin/flatpak
+Icon=org.kicad.KiCad
+Terminal=false
+Categories=Science;Electronics;Engineering;
+Keywords=PCB;esquemas;circuitos;electrónica;
+StartupNotify=true
+X-Flatpak=org.kicad.KiCad

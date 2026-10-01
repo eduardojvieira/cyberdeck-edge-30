@@ -1,0 +1,5 @@
+#!/bin/sh
+# Use the matching system Qt5, without Plasma's Qt6 theme/plugin overrides.
+unset LD_PRELOAD QT_PLUGIN_PATH QML2_IMPORT_PATH QT_QPA_PLATFORMTHEME
+export QT_QPA_PLATFORM=xcb
+exec /usr/bin/fritzing "$@"

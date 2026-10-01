@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=SMath Studio
+Comment=Hojas de cálculo matemático con fórmulas y unidades
+Exec=/home/droidian/.local/bin/smath-studio %f
+TryExec=/home/droidian/.local/bin/smath-studio
+Icon=accessories-calculator
+Terminal=false
+Categories=Science;Math;
+Keywords=math;matemática;ingeniería;unidades;worksheet;
+StartupNotify=true

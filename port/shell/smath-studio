@@ -1,0 +1,7 @@
+#!/bin/sh
+# The official universal assembly runs on the ARM64 Mono runtime, not Wine.
+unset LD_PRELOAD
+# Use app-private Cairo GDI+: the installed Pango-backed library crashes.
+export LD_LIBRARY_PATH=/home/linuxbrew/.linuxbrew/lib
+export FONTCONFIG_FILE="$HOME/.local/opt/smath-studio-1.5.0.9678/fonts.conf"
+exec /usr/bin/mono --config "$HOME/.local/opt/smath-studio-1.5.0.9678/mono.config" "$HOME/.local/opt/smath-studio-1.5.0.9678/Solver.exe" "$@"

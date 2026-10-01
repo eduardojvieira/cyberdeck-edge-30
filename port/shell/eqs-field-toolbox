@@ -40,6 +40,10 @@ CALCS = {
     'geometry': ('Geometría', 'Superficie, volumen y desperdicio', 'Largo, ancho y espesor [m]; desperdicio [%]. A = largo·ancho; V = A·espesor; estimación = base·(1+desperdicio/100). Sólo geometría y cantidad orientativa; no calcula resistencia estructural ni rendimientos de material.'),
 }
 APPS = {
+    'kicad': ('Diseño', 'KiCad · esquemas y PCB', 'KiCad ARM64 en Flatpak, con bibliotecas de símbolos, footprints y modelos. Renderizado por software; un diseño/exportación no valida eléctricamente una placa.', 'org.kicad.KiCad.desktop'),
+    'fritzing': ('Diseño', 'Fritzing · protoboard', 'Documentar conexiones de protoboard, esquemas y PCB con la versión Qt5 compatible. Verificá pines, tensiones y componentes: el dibujo no garantiza que el circuito sea seguro.', 'fritzing.desktop'),
+    'arduino': ('Programación', 'Arduino IDE · AVR', 'IDE clásico ARM64 con core AVR y compilador. Verificar compila sin placa; Subir flashea el dispositivo elegido. No subir ni abrir monitor serie sin identificar la placa y comprobar un estado seguro.', 'arduino.desktop'),
+    'smath': ('Ciencia', 'SMath Studio · hojas matemáticas', 'Hojas matemáticas con unidades y fórmulas visibles; GUI nativa con Mono, GDI+ Cairo y fuentes privados. Cálculos orientativos, no certificación física. Uso personal gratuito; revisar licencia para uso profesional.', 'smath-studio.desktop'),
     'qalculate': ('Unidades', 'Qalculate! Qt', 'Calculadora de unidades, expresiones y funciones. Para otras unidades usá esta aplicación, no conviertas mentalmente las entradas de las calculadoras.', 'io.github.Qalculate.qalculate-qt.desktop'),
     'convertall': ('Unidades', 'ConvertAll nativo Linux', 'Conversión de unidades en el runtime Qt aislado existente; no usa Waydroid.', 'convertall.desktop'),
     'okteta': ('Datos y HMI', 'Okteta · archivos binarios', 'Visor/editor hexadecimal. Abrí una COPIA: permite modificar archivos; no es un sandbox para archivos desconocidos.', 'org.kde.okteta.desktop'),
@@ -73,8 +77,8 @@ TOOLS = {key: row[:3] for source in (CALCS, APPS, GUIDES) for key, row in source
 TOOLS['guide'] = ('Ayuda', 'Controles, unidades y límites', HELP)
 COMMON = ('qalculate', 'convertall', 'qalc-help', 'units', 'guide')
 PROFILES = {
-    'electronics': ('EQS Electrónica', ('ohm', 'divider', 'led', 'rc', 'pwm', 'registers', 'rgb', 'framebuffer', 'ngspice', 'sigrok', 'pulseview', 'tio', 'srecord', 'okteta', 'geany', 'gcc') + COMMON),
-    'engineering': ('EQS Ingeniería', ('scaling', 'dosing', 'repeatability', 'motion', 'torque', 'geometry', 'octave', 'scilab', 'maxima', 'spyder', 'labplot', 'sqlite', 'meld', 'mqtt', 'visidata', 'miller', 'gnuplot', 'mosquitto', 'science-python', 'sage') + COMMON),
+    'electronics': ('EQS Electrónica', ('ohm', 'divider', 'led', 'rc', 'pwm', 'registers', 'rgb', 'framebuffer', 'kicad', 'fritzing', 'arduino', 'ngspice', 'sigrok', 'pulseview', 'tio', 'srecord', 'okteta', 'geany', 'gcc') + COMMON),
+    'engineering': ('EQS Ingeniería', ('scaling', 'dosing', 'repeatability', 'motion', 'torque', 'geometry', 'smath', 'octave', 'scilab', 'maxima', 'spyder', 'labplot', 'sqlite', 'meld', 'mqtt', 'visidata', 'miller', 'gnuplot', 'mosquitto', 'science-python', 'sage') + COMMON),
 }
 
 

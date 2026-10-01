@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Calcpad (web)
+Comment=Cuaderno de cálculos de ingeniería; editor oficial en línea
+Exec=/usr/bin/chromium --app=https://calcpad.eu/Ide
+TryExec=/usr/bin/chromium
+Icon=accessories-calculator
+Terminal=false
+Categories=Science;Engineering;
+Keywords=ingenieria;unidades;ecuaciones;calculo;cuaderno;
+StartupNotify=true

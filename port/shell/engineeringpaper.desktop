@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=EngineeringPaper (web)
+Comment=Hoja de cálculo de ingeniería con unidades; requiere Internet
+Exec=/usr/bin/chromium --app=https://engineeringpaper.xyz/
+TryExec=/usr/bin/chromium
+Icon=applications-science
+Terminal=false
+Categories=Science;Engineering;
+Keywords=ingenieria;unidades;ecuaciones;calculo;
+StartupNotify=true

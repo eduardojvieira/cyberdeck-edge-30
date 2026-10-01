@@ -297,3 +297,94 @@ en `~/.local/state/eqs-science-upgrade-20260910/new-launcher-files.txt` devuelve
 la selección a los anteriores; después ejecutar `kbuildsycoca6 --noincremental`.
 No borrar configuraciones, notebooks ni fórmulas/dependencias indiscriminadamente.
 Ese directorio privado conserva inventarios, resultados, logs y candidatos.
+
+## SMath Studio (30 de septiembre)
+
+Instalado **1.5.0.9678** desde el [paquete Mono oficial](https://www.smath.com/en-US/view/SMathStudio/download),
+en `~/.local/opt/smath-studio-1.5.0.9678/`. El acceso **SMath Studio** y
+`smath-studio` abren `Solver.exe` con Mono ARM64 nativo: no usa Wine, Waydroid
+ni emulación x86. También está en **EQS Ingeniería**. El otro ejecutable,
+`SMathStudio_Desktop.exe`, es la interfaz de terminal, no la GUI.
+
+El GDI+ del sistema falló en medición de texto con Pango. Una configuración
+privada de fuentes abrió una ventana vacía una vez, pero no solucionó las
+pruebas posteriores con hojas. La solución verificada usa **libgdiplus 6.2
+compilado con X11 y texto Cairo**, dentro del directorio de SMath, con las
+bibliotecas existentes de Homebrew. `mono.config` cambia sólo los mapas GDI+
+de una copia de `/etc/mono/config`; `fonts.conf` usa fuentes del sistema y una
+caché privada. El wrapper limita estos cambios al proceso SMath: **no modifica
+Mono, Fontconfig, Pango, GLib ni el escritorio globalmente**. No se aisló el
+bug nativo exacto y no se afirma una corrección upstream.
+
+### Reconstruir esta integración en el Edge
+
+Requiere el Homebrew ARM64 ya instalado y sus bibliotecas/cabeceras Cairo,
+Fontconfig, FreeType, GLib, X11, PNG, JPEG, TIFF y GIF. No actualizar la pila
+móvil para resolver estas dependencias. Primero simular y revisar APT:
+
+```sh
+set -e
+sudo apt-get --no-remove --no-upgrade --no-install-recommends install \
+  mono-runtime mono-libraries libgdiplus
+mkdir -p ~/.local/opt/smath-studio-1.5.0.9678 ~/.local/bin ~/.local/share/applications
+# Descargar fuera del repositorio; comprobar antes de extraer.
+curl -fL https://www.smath.com/en-US/files/Download/NKnL7/SMathStudioDesktop.1_5_0_9678.Mono.tar.gz \
+  -o SMathStudioDesktop.1_5_0_9678.Mono.tar.gz
+echo '8cc386d9d5b66befb102b3aca77c23543939bebdce82b137e1cba91df0d005a2  SMathStudioDesktop.1_5_0_9678.Mono.tar.gz' | sha256sum -c -
+tar -xzf SMathStudioDesktop.1_5_0_9678.Mono.tar.gz -C ~/.local/opt/smath-studio-1.5.0.9678
+curl -fL https://dl.winehq.org/mono/sources/libgdiplus/libgdiplus-6.2.tar.gz -o libgdiplus-6.2.tar.gz
+echo '683adb7d99d03f6ee7985173a206a2243f76632682334ced4cae2fcd20c83bc9  libgdiplus-6.2.tar.gz' | sha256sum -c -
+tar -xzf libgdiplus-6.2.tar.gz
+(
+  cd libgdiplus-6.2 || exit
+  # configure interpreta --without-pango como activar Pango y --with-x11
+  # como desactivar X11. Omitir ambos; ocultar Pango sólo a esta compilación.
+  printf '#!/bin/sh\ncase "$*" in *pango*) exit 1;; esac\nexec /home/linuxbrew/.linuxbrew/bin/pkg-config "$@"\n' > pkg-config-no-pango
+  chmod 700 pkg-config-no-pango
+  export PATH=/home/linuxbrew/.linuxbrew/bin:/usr/bin:/bin
+  export PKG_CONFIG_PATH=/home/linuxbrew/.linuxbrew/lib/pkgconfig:/home/linuxbrew/.linuxbrew/share/pkgconfig
+  export CPPFLAGS=-I/home/linuxbrew/.linuxbrew/include
+  export LDFLAGS='-L/home/linuxbrew/.linuxbrew/lib -Wl,-rpath,/home/linuxbrew/.linuxbrew/lib'
+  ./configure --prefix="$HOME/.local/opt/smath-studio-1.5.0.9678/gdiplus" \
+    --without-libexif CC=/usr/bin/gcc PKG_CONFIG="$PWD/pkg-config-no-pango" &&
+  make -j4 && make install
+)
+# La salida debe decir: Text = cairo; X11 = yes.
+python3 - <<'PY'
+from pathlib import Path
+import xml.etree.ElementTree as ET
+root = Path.home() / '.local/opt/smath-studio-1.5.0.9678'
+tree = ET.parse('/etc/mono/config')
+for mapping in tree.findall('dllmap'):
+    if mapping.get('dll') in ('gdiplus', 'gdiplus.dll', 'gdi32', 'gdi32.dll'):
+        mapping.set('target', str(root / 'gdiplus/lib/libgdiplus.so.0'))
+tree.write(root / 'mono.config', encoding='unicode')
+PY
+install -m644 port/shell/smath-fonts.conf ~/.local/opt/smath-studio-1.5.0.9678/fonts.conf
+install -m755 port/shell/smath-studio ~/.local/bin/
+install -m644 port/shell/smath-studio.desktop ~/.local/share/applications/
+python3 port/shell/test-engineering-apps.py
+smath-studio ~/.local/opt/smath-studio-1.5.0.9678/examples/EuclideanGCD.sm
+```
+
+El hash del archivo SMath es del artefacto HTTPS descargado; no se verificó
+una firma/digest separado del fabricante. El hash de libgdiplus coincide con
+la [fórmula Homebrew](https://formulae.brew.sh/formula/mono-libgdiplus).
+La compilación privada omite EXIF; no garantiza fallback tipográfico idéntico
+a Pango. No se usa `brew install mono-libgdiplus`: su bottle Linux no tenía
+el punto de entrada X11 requerido por WinForms. Los dos paquetes Brew de esa
+prueba se retiraron; el inventario Brew original quedó idéntico.
+
+La ventana abrió `EuclideanGCD.sm` en español a 1200×540 y permaneció activa
+45 segundos, sin un crash nativo. Esto comprueba apertura/renderizado inicial,
+**no edición prolongada, exactitud de todas las funciones, plugins o uso táctil**.
+La CLI de automatización devuelve un error de licencia: no se evitó ese control
+ni se informa como prueba de cálculo aprobada. El fabricante indica
+[uso personal gratuito y planes para organizaciones](https://smath.com/en-US);
+revisar la licencia antes de usarlo profesionalmente.
+
+Los accesos y la instalación son del teléfono vivo, **no de las recetas de
+imagen**. [KiCad, Fritzing y Arduino](TOOLBOX.md#engineering-apps-september-30)
+completan el toolbox de electrónica. Para revertir, retirar sólo los accesos
+SMath y su directorio privado después de conservar las hojas personales;
+no borrar proyectos ni ejecutar `autoremove` indiscriminadamente.

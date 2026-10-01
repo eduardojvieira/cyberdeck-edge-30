@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Excalidraw (web)
+Comment=Pizarra y diagramas; aplicación web oficial
+Exec=/usr/bin/chromium --app=https://excalidraw.com/
+TryExec=/usr/bin/chromium
+Icon=applications-graphics
+Terminal=false
+Categories=Graphics;
+Keywords=pizarra;diagramas;dibujos;esquemas;
+StartupNotify=true

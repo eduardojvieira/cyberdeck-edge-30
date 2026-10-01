@@ -1,0 +1,4 @@
+#!/bin/sh
+# App-only H29 compatibility; do not change other Electron applications.
+unset LD_PRELOAD
+exec /usr/bin/siyuan --ozone-platform=x11 --disable-gpu "$@"

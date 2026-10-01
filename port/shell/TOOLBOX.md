@@ -307,15 +307,16 @@ Research references: [Wireshark offline capture tools](https://www.wireshark.org
 ## Electronics and engineering toolboxes
 
 Two separate Plasma launchers use the **same Textual frontend and terminal ANSI
-palette** as Hacking Toolbox, not two copied interfaces. Open **EQS Electrónica**
+palette** as Hacking Toolbox, not two copied interfaces. The four app additions
+are documented [below](#engineering-apps-september-30). Open **EQS Electrónica**
 or **EQS Ingeniería**. The controls above apply; browsing/Enter reads help,
 while **Ctrl+R** or the action button explicitly executes. Calculations accept
 decimal comma and scientific notation, without thousands separators.
 
 | Toolbox | Offline calculators | Existing apps and help |
 |---|---|---|
-| **EQS Electrónica** — 21 entries | Ohm/power, unloaded resistor divider, LED resistor, RC time/cutoff, PWM, UINT32/INT32/FLOAT32 and four byte/word orders, RGB/HEX/RGB565, framebuffer memory. | Qalculate!, native ConvertAll, Okteta, Geany; Ngspice, Sigrok, PulseView, Tio, SRecord, GCC and units help. |
-| **EQS Ingeniería** — 25 entries | Linear industrial scaling, calibrated dosing/mass/error, sample repeatability, reduction/screw/counts per mm, shaft power/torque, rectangular area/volume/waste. | Existing Octave, Scilab, wxMaxima, Spyder, LabPlot, SQLite, Meld, MQTT Explorer and converters; Sage, scientific Python, VisiData, Miller, Gnuplot and MQTT help. |
+| **EQS Electrónica** — 24 entries | Ohm/power, unloaded resistor divider, LED resistor, RC time/cutoff, PWM, UINT32/INT32/FLOAT32 and four byte/word orders, RGB/HEX/RGB565, framebuffer memory. | KiCad, Fritzing, Arduino IDE, Qalculate!, native ConvertAll, Okteta, Geany; Ngspice, Sigrok, PulseView, Tio, SRecord, GCC and units help. |
+| **EQS Ingeniería** — 26 entries | Linear industrial scaling, calibrated dosing/mass/error, sample repeatability, reduction/screw/counts per mm, shaft power/torque, rectangular area/volume/waste. | SMath Studio, existing Octave, Scilab, wxMaxima, Spyder, LabPlot, SQLite, Meld, MQTT Explorer and converters; Sage, scientific Python, VisiData, Miller, Gnuplot and MQTT help. |
 
 All **14 calculators** show inputs, units, formulas and model limitations.
 The scaling calculator accepts reversed endpoints, reports out-of-range values
@@ -368,10 +369,11 @@ The shared frontend keeps the Hacking Toolbox defaults compatible. The live
 installation retains its previous frontend privately in
 `~/.cache/eqs-toolbox-before-field-20260930/`; restoring it and removing only
 the two field launchers/backend undoes this integration without a flash.
-No extra package, daemon or Python environment is required. **These are live
+The shared toolbox UI/backend itself needs no extra package, daemon or Python
+environment; the apps added below have their own dependencies. **These are live
 phone integrations, not additions to the base/current image recipes.**
 
-### Verification on September 30
+### Initial verification on September 30 (before the four app additions)
 
 - `test-field-toolbox.py`, `test-hacking.py` and `test-hacking-ui.py` passed on
   host and ARM64. Checks cover all 14 calculators, decimal comma, exact integer
@@ -400,3 +402,148 @@ Reference models: [TI's resistor-divider tool](https://www.ti.com/download/kbase
 and the [Ngspice manual](https://ngspice.sourceforge.io/docs/ngspice-manual.pdf)
 for deliberate offline simulation. These references do not validate a physical
 circuit or an industrial installation.
+
+
+## Engineering apps (September 30)
+
+Added to the live ARM64 phone and the existing field toolboxes, **not either
+image recipe**. All four apps have Plasma launchers.
+[SMath Studio 1.5.0.9678 and its private Cairo runtime](SCIENCE.md#smath-studio-30-de-septiembre)
+are documented separately.
+
+| App | Installed version / source | Compatibility choice |
+|---|---|---|
+| KiCad | **10.0.6**, Flathub `org.kicad.KiCad/aarch64/stable` | Isolated Python/GTK runtime and app-only software rendering. Native Sid requires Python 3.14, conflicting with the retained Waydroid bridge. Symbols, footprints, templates and 3D libraries are installed. |
+| Fritzing | **1.0.1-1+b4**, Droidian/Debian ARM64 | Matches the retained Qt5 5.15.15 cohort; newer Sid package requires incompatible Qt. Native XWayland wrapper, no system Qt replacement. |
+| Arduino IDE | **1.8.19** (`2:1.8.19+dfsg1-5`), Debian ARM64 | Classic IDE with AVR core 1.8.7 and GCC AVR 16.2.0. Upstream IDE 2.3.10 publishes Linux x86-64, not ARM64. Other board cores are not installed. |
+
+Reinstall **on the Edge**, after simulating and reviewing each transaction:
+
+```sh
+set -e
+sudo apt-get --no-remove --no-upgrade --no-install-recommends install arduino
+sudo apt-get --no-remove --no-upgrade --no-install-recommends install \
+  fritzing=1.0.1-1+b4 fritzing-data=1.0.1-1 \
+  libqt5serialport5=5.15.15-2 libqt5sql5t64=5.15.15+dfsg-6 \
+  libqt5xml5t64=5.15.15+dfsg-6 libqt5sql5-sqlite=5.15.15+dfsg-6
+sudo flatpak install --system flathub org.kicad.KiCad
+mkdir -p ~/.local/bin ~/.local/share/applications
+install -m755 port/shell/kicad port/shell/fritzing ~/.local/bin/
+install -m644 port/shell/org.kicad.KiCad.desktop port/shell/fritzing.desktop \
+  ~/.local/share/applications/
+python3 port/shell/test-engineering-apps.py
+```
+
+KiCad's wrapper deliberately calls `/usr/bin/flatpak.real`: Droidian's
+`flatpak-hybris` wrapper splits quoted arguments and injects Android GL paths.
+This override is **KiCad-only**; it does not change other Flatpaks or the phone's
+GPU configuration. Fritzing's wrapper removes inherited Qt plugin/theme paths
+for its native Qt5 runtime. Neither wrapper disables a sandbox.
+
+Verification: KiCad's first-run configuration window stayed up for 15 seconds;
+its CLI exported the bundled ECC83 schematic to SVG. Fritzing opened a blank
+sketch and exported the bundled RGB LED example to breadboard/schematic/PCB SVG.
+Arduino opened and **compiled an empty Uno sketch** (442 bytes flash, 9 bytes
+RAM), without a connected board. KiCad's setup wizard remains for the owner.
+Full touch/editing/3D workflows and actual board uploads have **not** been tested.
+An export or successful compile is not electrical or physical validation.
+
+Sources: [KiCad Linux](https://www.kicad.org/download/linux-distros/),
+[KiCad Flathub manifest](https://github.com/flathub/org.kicad.KiCad),
+[Debian Fritzing](https://packages.debian.org/trixie/fritzing),
+[Debian Arduino](https://packages.debian.org/sid/arduino), and
+[Arduino IDE 2 release assets](https://github.com/arduino/arduino-ide/releases/tag/2.3.10).
+
+
+After all four additions: **45 unique toolbox entries** (24 electronics,
+26 engineering; shared entries overlap). Exact before/after inventories show
+**49 new APT packages**, no removals or changes to any of the original 2332
+package/version rows, identical H29 and all 258 holds, and empty `dpkg --audit`.
+Wayfire/plasmashell were not restarted. The two unused Brew experiment formulas
+were removed; existing Brew versions stayed identical. No flash, serial port
+open, board upload or industrial command was performed.
+
+The focused host/ARM64 checks are `test-engineering-apps.py` (mocked argv,
+spaces and app-scoped environments) and `test-field-toolbox.py` (offline
+calculators and both Textual profiles); these are distinct from the short
+real GUI/export/compiler checks above. Removing an app needs a reviewed
+package transaction, not unholding mobile dependencies or a broad autoremove.
+
+## Worksheets, diagrams and notes (October 1)
+
+Six Plasma launcher entries are installed on the live Edge, **not either image
+recipe**. Search for their names in the launcher; no phone reboot is needed.
+
+| Launcher | Installed route | First use / limits |
+|---|---|---|
+| EngineeringPaper (web) | [Official application](https://engineeringpaper.xyz/) in Chromium app mode | Engineering worksheets, equations and units. Internet at startup; export important work to a file. |
+| Calcpad (web) | [Official online IDE](https://calcpad.eu/Ide) in Chromium app mode | Engineering calculation documents. The official desktop app requires Windows x64; no Wine or emulation installed. |
+| Excalidraw (web) | [Official whiteboard](https://excalidraw.com/) in Chromium app mode | Diagrams and sketches; export `.excalidraw` files. Upstream supports offline PWA use, but offline installation/cache has **not** been validated here. |
+| AFFiNE (web) | [Official web app](https://app.affine.pro/) in Chromium app mode | Notes and whiteboards. Current [v0.27.4 Linux release](https://github.com/toeverything/AFFiNE/releases/tag/v0.27.4) is x64 only, not ARM64. |
+| AppFlowy (web) | [Official web app](https://appflowy.com/app/) in Chromium app mode | Notes and projects. Current [0.14.6 Linux release](https://github.com/AppFlowy-IO/AppFlowy/releases/tag/0.14.6) and Flathub build are x86-64 only. |
+| SiYuan | [Official **3.8.6 ARM64 Debian package**](https://github.com/siyuan-note/siyuan/releases/tag/v3.8.6) | Native local notes. Choose a workspace folder at first launch. Tested Spanish UI and local kernel; no account or cloud sync configured. |
+
+The five web entries are **browser launchers, not native packages or an offline
+PWA installation**. They use the existing Chromium profile and website storage;
+their online code updates independently of APT. Internet, accounts and cloud
+sync depend on each service. No account, payment, sync or self-hosted server was
+configured. Browser storage is not a backup; export important work.
+
+### Reinstall on the Edge
+
+Download the pinned upstream SiYuan package and verify its SHA-256 before APT:
+
+```sh
+set -e
+curl --fail --location --output /tmp/siyuan-3.8.6-linux-arm64.deb \
+  https://github.com/siyuan-note/siyuan/releases/download/v3.8.6/siyuan-3.8.6-linux-arm64.deb
+echo '44a7e3eda29e16fc7e9bae452d32b6ded9db40d024504bb139ae6317c7680544  /tmp/siyuan-3.8.6-linux-arm64.deb' | sha256sum -c -
+sudo apt-get -s --no-remove --no-upgrade --no-install-recommends \
+  install /tmp/siyuan-3.8.6-linux-arm64.deb
+```
+
+**Review the simulation before proceeding.** On October 1 it proposed exactly
+one new package, no upgrades or removals. Stop if another transaction changes
+the retained mobile stack; do not unhold dependencies or run autoremove.
+
+```sh
+set -e
+sudo apt-get --no-remove --no-upgrade --no-install-recommends \
+  install /tmp/siyuan-3.8.6-linux-arm64.deb
+mkdir -p ~/.local/bin ~/.local/share/applications
+install -m755 port/shell/siyuan ~/.local/bin/
+install -m644 port/shell/siyuan.desktop port/shell/engineeringpaper.desktop \
+  port/shell/calcpad.desktop port/shell/excalidraw.desktop \
+  port/shell/affine-web.desktop port/shell/appflowy-web.desktop \
+  ~/.local/share/applications/
+update-desktop-database ~/.local/share/applications
+kbuildsycoca6 --noincremental
+python3 port/shell/test-engineering-apps.py
+```
+
+SiYuan's wrapper selects XWayland and software rendering **for this app only**,
+preserving quoted arguments and adding no `--no-sandbox` flag. Its default
+`system.networkServe=false` binds its kernel/proxy to localhost, confirmed
+from [upstream](https://github.com/siyuan-note/siyuan/blob/v3.8.6/kernel/server/serve.go)
+and the live test. Enabling network serving later is a separate security choice.
+The wrapper does not alter upstream Electron security settings.
+
+### Verification and remaining owner checks
+
+- Host and ARM64 launcher checks passed: five exact official URLs, quoted argv
+  and app-scoped SiYuan flags. Desktop entry validation and KDE/Gio discovery
+  passed for all six entries. The field-toolbox regression passed on ARM64 and
+  on the host using isolated Textual 8.2.8. Plain host Python lacks Textual; use
+  `uv run --no-project --with textual==8.2.8 python port/shell/test-field-toolbox.py`
+  without changing the system Python environment.
+- Each web application opened a real **1200×540** test window with its expected
+  page title and stayed up for **14 seconds**. Tests used separate browser
+  profiles, not personal accounts. The SiYuan wrapper opened a Spanish onboarding
+  workspace for **16 seconds** with localhost-only listeners; an earlier kernel
+  startup check ran for 20 seconds. Only temporary test processes were closed.
+- Exact inventory comparison: all **2381 prior APT package/version rows**
+  unchanged; only `siyuan=3.8.6` added. **258 holds**, H29 and Wayfire/plasmashell
+  PIDs unchanged; `dpkg --audit` empty. No flash, reboot or platform upgrade.
+- These checks prove short startup, **not full editing, touch usability,
+  offline operation, saved-file round trips or cloud sync**. Validate those
+  workflows with disposable content before using important project data.

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=AppFlowy (web)
+Comment=Notas y proyectos; servicio web oficial, no cliente Linux ARM64
+Exec=/usr/bin/chromium --app=https://appflowy.com/app/
+TryExec=/usr/bin/chromium
+Icon=applications-office
+Terminal=false
+Categories=Office;ProjectManagement;
+Keywords=notas;markdown;proyectos;tareas;
+StartupNotify=true

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=SiYuan
+Comment=Notas y documentos locales; versión nativa ARM64
+Exec=/home/droidian/.local/bin/siyuan %U
+TryExec=/usr/bin/siyuan
+Icon=siyuan
+StartupWMClass=org.b3log.siyuan
+Terminal=false
+Categories=Office;
+Keywords=notas;markdown;documentos;conocimiento;
+StartupNotify=true
